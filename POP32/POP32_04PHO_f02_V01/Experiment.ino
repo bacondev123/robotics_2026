@@ -21,7 +21,13 @@ void Lab_03() {
   // delay(500);
   // fowardCross();
   // spinLeft_SkipLine(30,1,1);
-  b512();
+  // b512();
+  // b513();
+  // waitSW_OK();
+  // b531()
+  b612();
+  waitSW_OK();
+  b614();
 }
 void Lab_04() {
 }

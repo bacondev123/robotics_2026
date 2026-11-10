@@ -116,6 +116,31 @@ void trackPD_Left(float speed, float Kp, float Kd) {
 
   lastError = error;
 }
+void trackPD_Right(float speed, float Kp, float Kd) {
+  float position = getLinePosition();
+  
+  // Normalize error: scale between -3.0 (Far Left) to +3.0 (Far Right)
+  float error = (position - CENTER_POS) / 500.0;
+
+  // P Term (Proportional)
+  float P = Kp * error;
+
+  // D Term (Derivative)
+  float D = Kd * (error - lastError);
+
+  // Compute total motor differential power
+  float power = P + D;
+
+  float leftSpeed  = speed + power;
+  float rightSpeed = speed - power;
+
+  leftSpeed  = constrain(leftSpeed, -100.0, 100.0);
+  rightSpeed = constrain(rightSpeed, -100.0, 100.0);
+
+  fd2(round(leftSpeed + MOTOR_BIAS + 10), round(rightSpeed));
+
+  lastError = error;
+}
 
 // ---------------------------------------------------------
 // 3. RUN PID FOR A FIXED TIME DURATION (in Milliseconds)
@@ -137,6 +162,18 @@ void trackPDLeft_Time(float speed, float Kp, float Kd, unsigned long durationMs)
 
   while (millis() - startClock < durationMs) {
     trackPD_Left(speed, Kp, Kd);
+  }
+
+  ao();
+  resetPD();
+}
+
+void trackPDRight_Time(float speed, float Kp, float Kd, unsigned long durationMs) {
+  resetPD();
+  unsigned long startClock = millis();
+
+  while (millis() - startClock < durationMs) {
+    trackPD_Right(speed, Kp, Kd);
   }
 
   ao();

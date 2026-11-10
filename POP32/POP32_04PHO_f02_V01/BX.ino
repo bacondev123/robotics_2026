@@ -47,16 +47,60 @@ void b4() {
 }
 void b512() {
   trackPD_Time(16, 6, 2, 1500);
-  waitSW_OK();
+  // waitSW_OK();
   fowardCross();
   delay(1000);
   spinLeft_SkipLine(30, 2, 1);
   // trackPDLeft_Time(16,8,2,100);
+  fowardCross();
 }
-void b532() {
+void b513() {
   trackPD_Time(16, 6, 2, 1500);
-  waitSW_OK();
   fowardCross();
   delay(1000);
   spinRight_SkipLine(30, 2, 1);
+  trackPD_Time(16, 8.5, 2, 2000);
+}
+void b532() {
+  trackPD_Time(16, 6, 2, 1500);
+  // waitSW_OK();
+  fowardCross();
+  delay(1000);
+  spinRight_SkipLine(30, 2, 1);
+  fowardCross();
+}
+void b531() {
+  trackPD_Time(16, 6, 2, 1500);
+  fowardCross();
+  delay(1000);
+  spinLeft_SkipLine(30, 2, 1);
+  trackPD_Time(16, 8.5, 2, 2000);
+}
+void b612(){
+  // skip_Line(1);
+  // trackPD_Time(20,12,3,2000);
+  trackPDLeft_Time(20,12,3,1250);
+}
+
+void b623(){
+  trackPDLeft_Time(20,12,3,1250);
+}
+void b634(){
+  trackPDLeft_Time(20,12,3,1250);
+}
+void b641(){
+  trackPDLeft_Time(20,12,3,1250);
+}
+
+void b614(){
+  trackPDRight_Time(20,12,3,1250);
+}
+void b621(){
+  trackPDRight_Time(20,12,3,1250);
+}
+void b632(){
+  trackPDRight_Time(20,12,3,1250);
+}
+void b643(){
+  trackPDRight_Time(20,12,3,1250);
 }
