@@ -25,6 +25,7 @@ void b1_legacy() {
   waitSW_OK();
   spinLeft_Delay(200);
   spinLeft_SkipLine(30, 1, 0);
+
   delay(300);
   fowardDelay(900);
   delay(300);
@@ -91,7 +92,11 @@ void b634(){
 void b641(){
   trackPDLeft_Time(20,12,3,1250);
 }
-
+void b613(){
+  trackPDLeft_Time(20,12,3,750, 15);
+  waitSW_OK();
+  trackPDRight_Time(20,12,3,1500);
+}
 void b614(){
   trackPDRight_Time(20,12,3,1250);
 }

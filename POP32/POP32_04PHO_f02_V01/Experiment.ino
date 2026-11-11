@@ -25,9 +25,10 @@ void Lab_03() {
   // b513();
   // waitSW_OK();
   // b531()
-  b612();
-  waitSW_OK();
-  b614();
+  // b612();
+  // waitSW_OK();
+  // b614();
+  b613();
 }
 void Lab_04() {
 }

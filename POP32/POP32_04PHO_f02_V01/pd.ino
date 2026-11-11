@@ -91,7 +91,7 @@ void trackPD(float speed, float Kp, float Kd, float Ki = 0.0) {
 
   lastError = error;
 }
-void trackPD_Left(float speed, float Kp, float Kd) {
+void trackPD_Left(float speed, float Kp, float Kd, float speedOffset) {
   float position = getLinePosition();
   
   // Normalize error: scale between -3.0 (Far Left) to +3.0 (Far Right)
@@ -112,11 +112,11 @@ void trackPD_Left(float speed, float Kp, float Kd) {
   leftSpeed  = constrain(leftSpeed, -100.0, 100.0);
   rightSpeed = constrain(rightSpeed, -100.0, 100.0);
 
-  fd2(round(leftSpeed + MOTOR_BIAS), round(rightSpeed + 10));
+  fd2(round(leftSpeed + MOTOR_BIAS), round(rightSpeed + 10 + speedOffset));
 
   lastError = error;
 }
-void trackPD_Right(float speed, float Kp, float Kd) {
+void trackPD_Right(float speed, float Kp, float Kd, float speedOffset) {
   float position = getLinePosition();
   
   // Normalize error: scale between -3.0 (Far Left) to +3.0 (Far Right)
@@ -137,7 +137,7 @@ void trackPD_Right(float speed, float Kp, float Kd) {
   leftSpeed  = constrain(leftSpeed, -100.0, 100.0);
   rightSpeed = constrain(rightSpeed, -100.0, 100.0);
 
-  fd2(round(leftSpeed + MOTOR_BIAS + 10), round(rightSpeed));
+  fd2(round(leftSpeed + MOTOR_BIAS + 10 + speedOffset), round(rightSpeed));
 
   lastError = error;
 }
@@ -156,24 +156,30 @@ void trackPD_Time(float speed, float Kp, float Kd, unsigned long durationMs, flo
   ao();
   resetPD();
 }
-void trackPDLeft_Time(float speed, float Kp, float Kd, unsigned long durationMs) {
+void trackPDLeft_Time(float speed, float Kp, float Kd, unsigned long durationMs, float speedOffset = 0) {
+  if (speedOffset == 0) {
+    speedOffset = 0;
+  }
   resetPD();
   unsigned long startClock = millis();
 
   while (millis() - startClock < durationMs) {
-    trackPD_Left(speed, Kp, Kd);
+    trackPD_Left(speed, Kp, Kd, speedOffset);
   }
 
   ao();
   resetPD();
 }
 
-void trackPDRight_Time(float speed, float Kp, float Kd, unsigned long durationMs) {
+void trackPDRight_Time(float speed, float Kp, float Kd, unsigned long durationMs, float speedOffset = 0) {
+  if (speedOffset == 0) {
+    speedOffset = 0;
+  }
   resetPD();
   unsigned long startClock = millis();
 
   while (millis() - startClock < durationMs) {
-    trackPD_Right(speed, Kp, Kd);
+    trackPD_Right(speed, Kp, Kd, speedOffset);
   }
 
   ao();
