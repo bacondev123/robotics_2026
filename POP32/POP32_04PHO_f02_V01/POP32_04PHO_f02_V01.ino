@@ -15,8 +15,24 @@ void trackPD_Cross(float speed, float Kp, float Kd, float Ki = 0.0);
 void trackPD_Side(int sensorIdx, float speed, float Kp, float Kd, float Ki = 0.0);
 void trackPD_Left(float speed, float Kp, float Kd, float speedOffset);
 void trackPD_Right(float speed, float Kp, float Kd, float speedOffset);
-void trackPDLeft_Time(float speed, float Kp, float Kd, unsigned long durationMs, float speedOffset = 0);
-void trackPDRight_Time(float speed, float Kp, float Kd, unsigned long durationMs, float speedOffset = 0);
+void trackPDLeft_Time(float speed, float Kp, float Kd, unsigned long durationMs, float speedOffset = 0.0, float minOffset = 0.0, float rampUpRatio = 0.0, float holdRatio = 0.0);
+void trackPDRight_Time(float speed, float Kp, float Kd, unsigned long durationMs, float speedOffset = 0.0, float minOffset = 0.0, float rampUpRatio = 0.0, float holdRatio = 0.0);
+void trackPD_Offset(float speed,
+                    float Kp,
+                    float Kd,
+                    float leftOffset  = 0.0,
+                    float rightOffset = 0.0);
+                    
+void trackPDLR_Time(float speed,
+                    float Kp,
+                    float Kd,
+                    unsigned long durationMs,
+                    float leftMin     = 0.0,
+                    float leftPeak    = 0.0,
+                    float rightMin    = 0.0,
+                    float rightPeak   = 0.0,
+                    float rampUpRatio = 0.0,
+                    float holdRatio   = 0.0);
 
 void setup() {
   oled.clear();

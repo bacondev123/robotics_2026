@@ -20,7 +20,63 @@ void resetPD() {
   integral     = 0.0;
   lastPosition = CENTER_POS;
 }
+// ---------------------------------------------------------
+// RAMP OFFSET HELPERS (Left/Right Neutral, Default = 0)
+// ---------------------------------------------------------
 
+// Single-channel 3-phase ramp: Ramp Up -> Hold -> Quick Decelerate
+// Returns 0.0 (no ramp) if no optional arguments are passed
+float getRampOffset(unsigned long elapsed,
+                    unsigned long totalDuration,
+                    float minOffset   = 0.0,
+                    float peakOffset  = 0.0,
+                    float rampUpRatio = 0.0,
+                    float holdRatio   = 0.0) {
+
+  // Safety / Default Guard: no duration, flat value, or zero ratios -> no ramp
+  if (totalDuration == 0 || peakOffset == minOffset || (rampUpRatio <= 0.0 && holdRatio <= 0.0)) {
+    return minOffset;
+  }
+
+  float t       = constrain((float)elapsed / (float)totalDuration, 0.0, 1.0);
+  float holdEnd = rampUpRatio + holdRatio;
+  if (holdEnd > 1.0) {
+    holdEnd = 1.0;
+  }
+
+  // Phase 1: Ramp Up (minOffset -> peakOffset)
+  if (t < rampUpRatio) {
+    float progress = (rampUpRatio > 0.0) ? (t / rampUpRatio) : 1.0;
+    return minOffset + (peakOffset - minOffset) * progress;
+  }
+
+  // Phase 2: Hold at Peak
+  if (t < holdEnd) {
+    return peakOffset;
+  }
+
+  // Phase 3: Quick Decelerate (peakOffset -> minOffset)
+  float decaySpan = 1.0 - holdEnd;
+  float progress  = (decaySpan > 0.0) ? ((t - holdEnd) / decaySpan) : 1.0;
+  return peakOffset - (peakOffset - minOffset) * progress;
+}
+
+// Dual-channel wrapper: sets both Left and Right offsets at once
+// Sets both outputs to 0.0 (no ramp) if no optional arguments are passed
+void getRampOffsetsLR(unsigned long elapsed,
+                      unsigned long totalDuration,
+                      float &leftOut,
+                      float &rightOut,
+                      float leftMin     = 0.0,
+                      float leftPeak    = 0.0,
+                      float rightMin    = 0.0,
+                      float rightPeak   = 0.0,
+                      float rampUpRatio = 0.0,
+                      float holdRatio   = 0.0) {
+
+  leftOut  = getRampOffset(elapsed, totalDuration, leftMin,  leftPeak,  rampUpRatio, holdRatio);
+  rightOut = getRampOffset(elapsed, totalDuration, rightMin, rightPeak, rampUpRatio, holdRatio);
+}
 // ---------------------------------------------------------
 // 1. CALCULATE WEIGHTED LINE POSITION (0 to 3000, Center = 1500)
 // ---------------------------------------------------------
@@ -156,30 +212,122 @@ void trackPD_Time(float speed, float Kp, float Kd, unsigned long durationMs, flo
   ao();
   resetPD();
 }
-void trackPDLeft_Time(float speed, float Kp, float Kd, unsigned long durationMs, float speedOffset = 0) {
-  if (speedOffset == 0) {
-    speedOffset = 0;
-  }
+void trackPDLeft_Time(float speed,
+                      float Kp,
+                      float Kd,
+                      unsigned long durationMs,
+                      float speedOffset = 0.0,
+                      float minOffset   = 0.0,
+                      float rampUpRatio = 0.0,
+                      float holdRatio   = 0.0) {
   resetPD();
   unsigned long startClock = millis();
 
   while (millis() - startClock < durationMs) {
-    trackPD_Left(speed, Kp, Kd, speedOffset);
+    unsigned long elapsed = millis() - startClock;
+    float currentOffset   = speedOffset;
+
+    // Activate ramp only when ramp ratios are provided
+    if (rampUpRatio > 0.0 || holdRatio > 0.0) {
+      currentOffset = getRampOffset(elapsed, durationMs,
+                                    minOffset, speedOffset,
+                                    rampUpRatio, holdRatio);
+    }
+
+    trackPD_Left(speed, Kp, Kd, currentOffset);
   }
 
   ao();
   resetPD();
 }
 
-void trackPDRight_Time(float speed, float Kp, float Kd, unsigned long durationMs, float speedOffset = 0) {
-  if (speedOffset == 0) {
-    speedOffset = 0;
-  }
+void trackPDRight_Time(float speed,
+                       float Kp,
+                       float Kd,
+                       unsigned long durationMs,
+                       float speedOffset = 0.0,
+                       float minOffset   = 0.0,
+                       float rampUpRatio = 0.0,
+                       float holdRatio   = 0.0) {
   resetPD();
   unsigned long startClock = millis();
 
   while (millis() - startClock < durationMs) {
-    trackPD_Right(speed, Kp, Kd, speedOffset);
+    unsigned long elapsed = millis() - startClock;
+    float currentOffset   = speedOffset;
+
+    // Activate ramp only when ramp ratios are provided
+    if (rampUpRatio > 0.0 || holdRatio > 0.0) {
+      currentOffset = getRampOffset(elapsed, durationMs,
+                                    minOffset, speedOffset,
+                                    rampUpRatio, holdRatio);
+    }
+
+    trackPD_Right(speed, Kp, Kd, currentOffset);
+  }
+
+  ao();
+  resetPD();
+}
+// Add to Section 2
+void trackPD_Offset(float speed,
+                    float Kp,
+                    float Kd,
+                    float leftOffset  = 0.0,
+                    float rightOffset = 0.0) {
+  float position = getLinePosition();
+
+  // Normalize error: scale between -3.0 (Far Left) to +3.0 (Far Right)
+  float error = (position - CENTER_POS) / 500.0;
+
+  // P Term (Proportional)
+  float P = Kp * error;
+
+  // D Term (Derivative)
+  float D = Kd * (error - lastError);
+
+  // Compute total motor differential power
+  float power = P + D;
+
+  float leftSpeed  = speed + power;
+  float rightSpeed = speed - power;
+
+  leftSpeed  = constrain(leftSpeed, -100.0, 100.0);
+  rightSpeed = constrain(rightSpeed, -100.0, 100.0);
+
+  fd2(round(leftSpeed + MOTOR_BIAS + leftOffset), round(rightSpeed + rightOffset));
+
+  lastError = error;
+}
+
+// Add to Section 3
+void trackPDLR_Time(float speed,
+                    float Kp,
+                    float Kd,
+                    unsigned long durationMs,
+                    float leftMin     = 0.0,
+                    float leftPeak    = 0.0,
+                    float rightMin    = 0.0,
+                    float rightPeak   = 0.0,
+                    float rampUpRatio = 0.0,
+                    float holdRatio   = 0.0) {
+  resetPD();
+  unsigned long startClock = millis();
+
+  while (millis() - startClock < durationMs) {
+    unsigned long elapsed = millis() - startClock;
+    float leftOff         = leftPeak;
+    float rightOff        = rightPeak;
+
+    if (rampUpRatio > 0.0 || holdRatio > 0.0) {
+      getRampOffsetsLR(elapsed, durationMs,
+                       leftOff, rightOff,
+                       leftMin, leftPeak,
+                       rightMin, rightPeak,
+                       rampUpRatio, holdRatio);
+    }
+
+    trackPD_Offset(speed, Kp, Kd, leftOff, rightOff);
   }
 
   ao();

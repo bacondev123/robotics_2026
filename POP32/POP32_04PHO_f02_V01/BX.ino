@@ -77,35 +77,59 @@ void b531() {
   spinLeft_SkipLine(30, 2, 1);
   trackPD_Time(16, 8.5, 2, 2000);
 }
-void b612(){
+void b612() {
   // skip_Line(1);
   // trackPD_Time(20,12,3,2000);
-  trackPDLeft_Time(20,12,3,1250);
+  trackPDLeft_Time(20, 12, 3, 1250);
 }
 
-void b623(){
-  trackPDLeft_Time(20,12,3,1250);
+void b623() {
+  trackPDLeft_Time(20, 12, 3, 1250);
 }
-void b634(){
-  trackPDLeft_Time(20,12,3,1250);
+void b634() {
+  trackPDLeft_Time(20, 12, 3, 1250);
 }
-void b641(){
-  trackPDLeft_Time(20,12,3,1250);
+void b641() {
+  trackPDLeft_Time(20, 12, 3, 1250);
 }
-void b613(){
-  trackPDLeft_Time(20,12,3,750, 15);
-  waitSW_OK();
-  trackPDRight_Time(20,12,3,1500);
+void b613() {
+  // trackPDLeft_Time(20, 12, 3, 500, 20, 0, 0.3, 0.4);
+  trackPDLeft_Time(20, 12, 3, 750, 5);
+  // waitSW_OK();
+  trackPDRight_Time(20, 12, 3, 750, 5);
+  trackPDLeft_Time(20,12,3,750, 5);
 }
-void b614(){
-  trackPDRight_Time(20,12,3,1250);
+void b624() {
+  // trackPDLeft_Time(20, 12, 3, 500, 20, 0, 0.3, 0.4);
+  trackPDLeft_Time(20, 12, 3, 750, 5);
+  trackPDRight_Time(20, 12, 3, 750, 5);
+  trackPDLeft_Time(20,12,3,750, 5);
 }
-void b621(){
-  trackPDRight_Time(20,12,3,1250);
+void b631() {
+  // trackPDLeft_Time(20, 12, 3, 500, 20, 0, 0.3, 0.4);
+  trackPDLeft_Time(20, 12, 3, 750, 5);
+  trackPDRight_Time(20, 12, 3, 750, 5);
+  trackPDLeft_Time(20,12,3,750, 5);
 }
-void b632(){
-  trackPDRight_Time(20,12,3,1250);
+void b642() {
+  // trackPDLeft_Time(20, 12, 3, 500, 20, 0, 0.3, 0.4);
+  trackPDLeft_Time(20, 12, 3, 750, 5);
+  trackPDRight_Time(20, 12, 3, 750, 5);
+  trackPDLeft_Time(20,12,3,750, 5);
 }
-void b643(){
-  trackPDRight_Time(20,12,3,1250);
+void b614() {
+  trackPDRight_Time(20, 12, 3, 1250);
+}
+void b621() {
+  trackPDRight_Time(20, 12, 3, 1250);
+}
+void b632() {
+  trackPDRight_Time(20, 12, 3, 1250);
+}
+void b643() {
+  trackPDRight_Time(20, 12, 3, 1250);
+}
+
+void b712() {
+  trackPDLeft_Time(20, 12, 3, 750);
 }
