@@ -1,0 +1,53 @@
+-- ==== RAYCAST + DASH ====------------------------------------------------------------------------
+Raycast **MUST** have Origin, Direction, Params
+Dash **MUST** Attachment, Velocity
+เครื่องเรา (Local): อยากส่งเรื่องให้เบื้องบน (Server) ต้อง "จุดไฟ (Fire)" ส่งสัญญาณขึ้นไป -> FireServer
+
+เซิร์ฟเวอร์ (Server): มีหน้าที่ "เชื่อมต่อ (Connect)" เหตุการณ์เข้ากับการกระทำ -> OnServerEvent:Connect
+-- ==== RAYCAST + DASH ====------------------------------------------------------------------------
+
+-- ==== SWORD SKILL ====------------------------------------------------------------------------
+🛡️ คัมภีร์ 5 ขั้นตอนของ Sword Skill
+เพื่อให้คุณนึกออกเสมอว่าต้องเขียนอะไร ให้จำ 5 สเต็ป นี้ไว้ครับ:
+
+Input: รับคำสั่งกดปุ่ม (Q, E, R)
+
+Move: สั่งให้ตัวละครพุ่ง (LinearVelocity)
+
+Check: ยิงเลเซอร์ตรวจจับศัตรู (Raycast)
+
+Send: ส่งชื่อศัตรูไปบอกเซิร์ฟเวอร์ (RemoteEvent)
+
+Damage: เซิร์ฟเวอร์ลดเลือด (Server Script)
+-- ==== SWORD SKILL ====------------------------------------------------------------------------
+
+-- ==== TWEENING SERVICE ====-----------------------------------------------------------------------------
+TweeningService code example:
+
+local TweenService = game:GetService("TweenService")
+
+-- 1. เลือกของที่จะเปลี่ยน (เช่น กล้อง, พาร์ท, UI)
+local objectToAnimate = workspace.CurrentCamera
+
+-- 2. ตั้งค่าระยะเวลาและสไตล์ (TweenInfo)
+local tweenInfo = TweenInfo.new(
+    0.5, -- ใช้เวลา 0.5 วินาที
+    Enum.EasingStyle.Sine, -- สไตล์การขยับ (นุ่มนวล)
+    Enum.EasingDirection.Out -- ค่อยๆ ช้าลงตอนจบ
+)
+
+-- 3. กำหนดค่าเป้าหมายที่อยากให้เป็น (ใส่ในปีกกา {})
+local goal = {FieldOfView = 90} -- เช่น อยากให้กล้องกว้างขึ้น
+
+-- 4. สร้างและกด Play!
+local tween = TweenService:Create(objectToAnimate, tweenInfo, goal)
+tween:Play()
+
+-- ตัวอย่างการใช้ TweenService ให้ตัวละครค่อยๆ เดินเร็วขึ้นตอนจบสกิล (แทนที่จะเซ็ต WalkSpeed = originalSpeed ทันที)
+local ts = game:GetService("TweenService")
+local info = TweenInfo.new(duration_recovery) -- ใช้เวลาเท่าช่วงชะงัก
+local goal = {WalkSpeed = originalSpeed}
+
+local recoveryTween = ts:Create(hum, info, goal)
+recoveryTween:Play()
+-- ==== TWEENING SERVICE ====-----------------------------------------------------------------------------

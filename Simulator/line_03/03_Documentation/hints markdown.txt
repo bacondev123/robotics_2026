@@ -1,0 +1,93 @@
+# 🕹️ Roblox Lua: Active Recall & Cheatsheet
+> **Pro Tip for Active Recall**: Try to answer the questions in your head before expanding the answers.
+
+---
+
+## 🧠 Part 1: Active Recall (Flashcards)
+
+<details>
+<summary><b>📡 1. เครื่องเรา (Local) อยากส่งเรื่องให้เบื้องบน (Server) ต้องใช้คำสั่งอะไร?</b></summary>
+<br>
+"จุดไฟ" ส่งสัญญาณขึ้นไป <br>
+<code>RemoteEvent:FireServer()</code>
+<hr>
+</details>
+
+<details>
+<summary><b>📡 2. เซิร์ฟเวอร์ (Server) จะรับเรื่องและลงมือทำงาน ต้องใช้คำสั่งอะไร?</b></summary>
+<br>
+"เชื่อมต่อ" เหตุการณ์ <br>
+<code>RemoteEvent.OnServerEvent:Connect(function() ... end)</code>
+<hr>
+</details>
+
+<details>
+<summary><b>🏃 3. สามสิ่ง (3) ที่ Raycast "ต้องมี" เสมอคืออะไร?</b></summary>
+<br>
+1. Origin <br>
+2. Direction <br>
+3. Params
+<hr>
+</details>
+
+<details>
+<summary><b>🏃 4. สองสิ่ง (2) ที่ Dash (การพุ่ง) "ต้องมี" เสมอคืออะไร?</b></summary>
+<br>
+1. Attachment <br>
+2. Velocity (Usually via <code>LinearVelocity</code>)
+<hr>
+</details>
+
+<details>
+<summary><b>⚔️ 5. ท่อง "คัมภีร์ 5 ขั้นตอน" ของการทำ Sword Skill</b></summary>
+<br>
+1. <b>Input:</b> รับคำสั่งกดปุ่มจากผู้เล่น (Q, E, R)<br>
+2. <b>Move:</b> สั่งให้ตัวละครพุ่ง (LinearVelocity)<br>
+3. <b>Check:</b> ยิงเลเซอร์/ตรวจจับศัตรูว่าโดนตีไหม (Raycast)<br>
+4. <b>Send:</b> ส่งข้อมูลและชื่อเป้าหมายไปบอก Server (RemoteEvent)<br>
+5. <b>Damage:</b> Server อนุมัติการลดเลือด (Server Script)
+<hr>
+</details>
+
+<details>
+<summary><b>🎬 6. การตั้งค่า 4 ขั้นตอน สำหรับ Tweening Service มีอะไรบ้าง?</b></summary>
+<br>
+1. เลือกของที่จะเปลี่ยน (Object) <br>
+2. ตั้งค่าเวลาและสไตล์ด้วย (<code>TweenInfo.new</code>) <br>
+3. กำหนดค่าเป้าหมาย (<code>Goal {}</code>) <br>
+4. สร้างและกดเริ่ม (<code>Create()</code> และ <code>Play()</code>)
+<hr>
+</details>
+
+<br>
+
+---
+
+## 📜 Part 2: Quick Reference / Cheatsheet 
+
+### 1. Raycast & Dash Fundamentals
+- **Raycast Basics**: `workspace:Raycast(Origin, Direction, Params)`
+- **Dash / Move**: Assign an `Attachment` inside the HumanoidRootPart and pair it with a `LinearVelocity` modifier.
+
+### 2. Tweening Service Usage 
+
+**Step-by-step Structure:**
+```lua
+local TweenService = game:GetService("TweenService")
+
+-- 1. เลือกของที่จะเปลี่ยน
+local objectToAnimate = workspace.CurrentCamera
+
+-- 2. ตั้งค่าระยะเวลาและสไตล์ (TweenInfo)
+local tweenInfo = TweenInfo.new(
+    0.5, -- ใช้เวลา 0.5 วินาที
+    Enum.EasingStyle.Sine, -- สไตล์การขยับ (นุ่มนวล)
+    Enum.EasingDirection.Out -- ค่อยๆ ช้าลงตอนจบ
+)
+
+-- 3. กำหนดค่าเป้าหมาย (Goal) ให้อยู่ในปีกกาเสมอ
+local goal = { FieldOfView = 90 }
+
+-- 4. สร้างและ Play!
+local tween = TweenService:Create(objectToAnimate, tweenInfo, goal)
+tween:Play()

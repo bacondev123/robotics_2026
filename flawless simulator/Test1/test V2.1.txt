@@ -1,0 +1,394 @@
+// HARDWARE PINS
+int MOTOR_L_PWM = 9;  int MOTOR_L_DIR = 7;
+int MOTOR_R_PWM = 10; int MOTOR_R_DIR = 4;
+int HORN_PIN = 8;
+int GRABBER_PIN = 5;
+int ObjSensorVal = A5;
+
+constexpr int DEFAULT_LINE_SKIP = 180;
+constexpr int NUM_SENSORS = 4;
+// Sensors: 0=Left-most, 1=Middle-Left, 2=Middle-Right, 3=Right-most
+constexpr int sensorsPins[NUM_SENSORS] = {A0, A1, A2, A3}; 
+constexpr int sensorsRef[NUM_SENSORS] = {511, 511, 511, 511};
+
+// Global array to store current sensor values
+int sensorValue[NUM_SENSORS] = {0, 0, 0, 0}; 
+
+// Small debounce delay for line detection (adjust as needed)
+constexpr int TURN_DELAY_MS = 10; 
+
+void setup() {
+  Serial.begin(9600);
+  pinMode(MOTOR_L_PWM, OUTPUT); pinMode(MOTOR_L_DIR, OUTPUT);
+  pinMode(MOTOR_R_PWM, OUTPUT); pinMode(MOTOR_R_DIR, OUTPUT);
+  pinMode(HORN_PIN, OUTPUT);
+
+  // // Your original sequence
+
+  trac_CR(100);
+  delay(1000);
+  keep_up();
+  getObjVal();
+  delay(500);
+  trac_cross(100);
+  ao();
+  delay(500);
+  keep_down();
+  delay(300);
+  backwardDelay(100, 300);
+
+
+  // trac_CR(100);
+  // fowardDelay(100, DEFAULT_LINE_SKIP);
+  // readSensors();
+  // turnRight(100);
+  // trac_cross(100);
+  // fowardDelay(100, DEFAULT_LINE_SKIP);
+  // turnLeft(100);
+  // trac_cross(100);
+  // fowardLineSkip();
+  // trac_cross(100);
+  // fowardLineSkip();
+  // turnLeft(100);
+}
+
+void loop() {
+  // readSensors();
+  // delay(250);
+}
+
+// ==========================================
+// CORE MOVEMENT ENGINE
+// ==========================================
+
+void fd2(int Leftspeed, int RightSpeed){
+  // Constrain limits to prevent values outside -100 to +100
+  Leftspeed = constrain(Leftspeed, -100, 100);
+  RightSpeed = constrain(RightSpeed, -100, 100);
+
+  // --- Left Motor Logic ---
+  if (Leftspeed >= 0) {
+    digitalWrite(MOTOR_L_DIR, LOW);  // Forward polarity
+  } else {
+    digitalWrite(MOTOR_L_DIR, HIGH); // Reverse polarity
+  }
+  
+  // --- Right Motor Logic ---
+  if (RightSpeed >= 0) {
+    digitalWrite(MOTOR_R_DIR, LOW);  // Forward polarity
+  } else {
+    digitalWrite(MOTOR_R_DIR, HIGH); // Reverse polarity
+  }
+
+  // Convert the -100/100 scale to 0-255 using absolute values (abs)
+  analogWrite(MOTOR_L_PWM, (abs(Leftspeed) * 255) / 100); 
+  analogWrite(MOTOR_R_PWM, (abs(RightSpeed) * 255) / 100);
+}
+
+// ==========================================
+// WRAPPER FUNCTIONS 
+// ==========================================
+
+void tl(int speed) { fd2(speed, 0); }               // Turn Left (Pivot on left wheel)
+void tr(int speed) { fd2(0, speed); }               // Turn Right (Pivot on right wheel)
+void sl(int speed) { fd2(-speed, speed); }          // Spin Left (Tank turn)
+void sr(int speed) { fd2(speed, -speed); }          // Spin Right (Tank turn)
+void bk(int speed) { fd2(-speed, -speed); }         // Backward
+
+// Stop all motors
+void ao(){
+  analogWrite(MOTOR_L_PWM, 0);
+  analogWrite(MOTOR_R_PWM, 0);
+}
+
+// ==========================================
+// SENSORS & LINE DETECTION HELPERS
+// ==========================================
+
+// FAST & SILENT: Reads sensor hardware at maximum speed with NO serial printing or delays
+void updateSensors() {
+  for (int i = 0; i < NUM_SENSORS; i++) {
+    sensorValue[i] = analogRead(sensorsPins[i]);
+  }
+}
+
+// DIAGNOSTIC ONLY: Original slow function for manual diagnostics with serial prints
+void readSensors(){
+  for (int i = 0; i < NUM_SENSORS; i++) {
+    sensorValue[i] = analogRead(sensorsPins[i]); // Update global array
+    Serial.print("S");
+    Serial.print(i); 
+    Serial.print(":");
+    Serial.print(sensorValue[i]);
+    Serial.print("\t");  
+  }
+  Serial.println(); 
+  delay(1);       
+}
+int getObjVal() {
+  int objVal = analogRead(ObjSensorVal);
+  
+  Serial.print("A5:");
+  Serial.println(objVal); // Added 'ln' to jump to a new line in the Serial Monitor
+  
+  return objVal; // Return the value so the robot can actually use it
+}
+// Sensor Logic: Low value (< reference) is White, High value (>= reference) is Black
+bool isWhite(int sensorIndex) {
+  return sensorValue[sensorIndex] < sensorsRef[sensorIndex];
+}
+
+bool isBlack(int sensorIndex) {
+  return sensorValue[sensorIndex] >= sensorsRef[sensorIndex];
+}
+
+// ==========================================
+// ORIGINAL ROTATION LOGIC (UNCHANGED)
+// ==========================================
+
+void turnLeft(int speed){
+  sl(100);
+  delay(100);
+  ao();
+  while(1){
+    if(analogRead(sensorsPins[1]) > sensorsRef[1]){
+      break;
+    }
+    else sl(speed);
+  }
+  ao();
+  while(1){
+    if(analogRead(sensorsPins[2]) > sensorsRef[2]){
+      break;
+    }
+    else sl(speed);
+  }
+  ao();
+}
+
+void turnRight(int speed){
+  sr(100);
+  delay(100);
+  ao();
+  while(1){
+    if(analogRead(sensorsPins[2]) > sensorsRef[2]){
+      break;
+    }
+    else sr(speed);
+  }
+  ao();
+  while(1){
+    if(analogRead(sensorsPins[1]) > sensorsRef[1]){
+      break;
+    }
+    else sr(speed);
+  }
+  ao();
+}
+
+// ==========================================
+// SEPARATE ROTATION / PIVOT FUNCTIONS
+// ==========================================
+
+void pivotLeftToLine(int turnCommandSpeed, int targetSensorIndex) {
+  int activeSpinPwm = turnCommandSpeed; 
+  
+  sl(activeSpinPwm);
+  delay(50); // Blind thrust to guarantee we escape the current line
+
+  while (1) {
+    updateSensors(); // Fast, silent sensor reading
+    if (isWhite(targetSensorIndex)) break; 
+  }
+  
+  delay(TURN_DELAY_MS);
+
+  while (1) {
+    updateSensors(); 
+    if (isBlack(targetSensorIndex)) break;
+  }
+
+  ao();               
+  // resetPIDVariables(); // Uncomment this when you add your PID functions later
+}
+
+void pivotRightToLine(int turnCommandSpeed, int targetSensorIndex) {
+  int activeSpinPwm = turnCommandSpeed; 
+  
+  sr(activeSpinPwm);
+  delay(50); 
+
+  while (1) {
+    updateSensors(); 
+    if (isWhite(targetSensorIndex)) break; 
+  }
+  
+  delay(TURN_DELAY_MS);
+
+  while (1) {
+    updateSensors(); 
+    if (isBlack(targetSensorIndex)) break;
+  }
+
+  ao();               
+  // resetPIDVariables(); // Uncomment this when you add your PID functions later
+}
+
+void pivotLeftSkipLines(int turnCommandSpeed, int targetSensorIndex, int lineSkipAmount) {
+  int activeSpinPwm = turnCommandSpeed; 
+  
+  sl(activeSpinPwm);
+  delay(50); 
+
+  for (int skipIteration = 1; skipIteration <= lineSkipAmount; skipIteration++) {
+    while (1) {
+      updateSensors();
+      if (isWhite(targetSensorIndex)) break;
+    }
+    
+    if (skipIteration < lineSkipAmount) delay(TURN_DELAY_MS);
+
+    while (1) {
+      updateSensors();
+      if (isBlack(targetSensorIndex)) break;
+    }
+    
+    if (skipIteration < lineSkipAmount) delay(TURN_DELAY_MS);
+  }
+
+  ao();               
+  // resetPIDVariables(); // Uncomment this when you add your PID functions later
+}
+
+void pivotRightSkipLines(int turnCommandSpeed, int targetSensorIndex, int lineSkipAmount) {
+  int activeSpinPwm = turnCommandSpeed; 
+  
+  sr(activeSpinPwm);
+  delay(50); 
+
+  for (int skipIteration = 1; skipIteration <= lineSkipAmount; skipIteration++) {
+    while (1) {
+      updateSensors();
+      if (isWhite(targetSensorIndex)) break;
+    }
+    
+    if (skipIteration < lineSkipAmount) delay(TURN_DELAY_MS);
+
+    while (1) {
+      updateSensors();
+      if (isBlack(targetSensorIndex)) break;
+    }
+    
+    if (skipIteration < lineSkipAmount) delay(TURN_DELAY_MS);
+  }
+
+  ao();               
+  // resetPIDVariables(); // Uncomment this when you add your PID functions later
+}
+
+// ==========================================
+// LINE TRACKING (Silent, high-speed execution)
+// ==========================================
+
+void followUntilLine(int speed){
+  while(1){
+    updateSensors(); // Fast, silent sensor update
+    if (sensorValue[1] > sensorsRef[1] && sensorValue[3] > sensorsRef[3]){
+      break;
+    } else {
+      fd2(speed,speed);
+    }
+  }
+  ao();
+}
+
+void followLine(int speed){
+  updateSensors(); // Fast, silent sensor update
+  if (sensorValue[1] < sensorsRef[1] && sensorValue[2] < sensorsRef[2]) {
+    fd2(speed,speed);
+  }
+  else if (sensorValue[1] > sensorsRef[1] && sensorValue[2] < sensorsRef[2]) {
+    tr(50); 
+  }                            
+  else if (sensorValue[1] < sensorsRef[1] && sensorValue[2] > sensorsRef[2]) {
+    tl(50); 
+  }    
+  else{
+    fd2(speed,speed);
+  }                        
+}
+
+void turnLeftLine(int speed){
+  while(1){
+    updateSensors();
+    if(sensorValue[1] > sensorsRef[1]){
+      break;
+    }
+    else { tl(speed); }
+  }
+  ao();
+}
+
+void trac_CR(int speed){
+  while(1){
+    updateSensors();
+    if(sensorValue[3] > sensorsRef[3]){
+      break;
+    }
+    else { followLine(speed); }
+  }
+  ao();
+}
+
+void trac_CL(int speed){
+  while(1){
+    updateSensors();
+    if(sensorValue[0] > sensorsRef[0]){
+      break;
+    }
+    else { followLine(speed); }
+  }
+  ao();
+}
+
+void trac_cross(int speed){
+  while(1){
+    updateSensors();
+    if(sensorValue[0] > sensorsRef[0] && sensorValue[3] > sensorsRef[3]){
+      break;
+    }
+    else { followLine(speed); }
+  }
+  ao();
+}
+
+// ==========================================
+// UTILITY FUNCTIONS
+// ==========================================
+
+void fowardDelay(int speed, int delayMS){
+  ao();
+  fd2(speed, speed);
+  delay(delayMS);
+  ao();
+}
+void backwardDelay(int speed, int delayMS){
+  ao();
+  fd2(-speed, -speed);
+  delay(delayMS);
+  ao();
+}
+
+void fowardLineSkip(){
+  fd2(100,100);
+  delay(DEFAULT_LINE_SKIP); 
+  ao();
+}
+
+void beep(){
+  digitalWrite(HORN_PIN, HIGH); 
+  delay(500); 
+  digitalWrite(HORN_PIN, LOW);
+}
+void keep_up() { digitalWrite(GRABBER_PIN, HIGH); }
+void keep_down() { digitalWrite(GRABBER_PIN, LOW); }

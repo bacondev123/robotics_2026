@@ -1,0 +1,213 @@
+// HARDWARE PINS
+int MOTOR_L_PWM = 9;  int MOTOR_L_DIR = 7;
+int MOTOR_R_PWM = 10; int MOTOR_R_DIR = 4;
+int HORN_PIN = 8;
+
+constexpr int DEFAULT_LINE_SKIP = 35;
+constexpr int NUM_SENSORS = 4;
+// Sensors: 0=Left-most, 1=Middle-Left, 2=Middle-Right, 3=Right-most
+constexpr int sensorsPins[NUM_SENSORS] = {A0, A1, A2, A3}; 
+constexpr int sensorsRef[NUM_SENSORS] = {511, 511, 511, 511};
+
+void setup() {
+  Serial.begin(9600);
+  pinMode(MOTOR_L_PWM, OUTPUT); pinMode(MOTOR_L_DIR, OUTPUT);
+  pinMode(MOTOR_R_PWM, OUTPUT); pinMode(MOTOR_R_DIR, OUTPUT);
+  pinMode(HORN_PIN, OUTPUT);
+
+  // Your original sequence
+  trac_CR(100);
+  fowardDelay(100, DEFAULT_LINE_SKIP);
+  turnRight(100);
+  trac_cross(100);
+  fowardDelay(100, DEFAULT_LINE_SKIP);
+  turnLeft(100);
+  trac_cross(100);
+  fowardLineSkip();
+  trac_cross(100);
+  fowardLineSkip();
+  turnLeft(100);
+}
+
+void loop() {
+  // Empty as per your original code
+}
+
+// ==========================================
+// CORE MOVEMENT ENGINE
+// ==========================================
+
+void fd2(int Leftspeed, int RightSpeed){
+  // Constrain limits to prevent values outside -100 to +100
+  Leftspeed = constrain(Leftspeed, -100, 100);
+  RightSpeed = constrain(RightSpeed, -100, 100);
+
+  // --- Left Motor Logic ---
+  if (Leftspeed >= 0) {
+    digitalWrite(MOTOR_L_DIR, LOW);  // Forward polarity
+  } else {
+    digitalWrite(MOTOR_L_DIR, HIGH); // Reverse polarity
+  }
+  
+  // --- Right Motor Logic ---
+  if (RightSpeed >= 0) {
+    digitalWrite(MOTOR_R_DIR, LOW);  // Forward polarity
+  } else {
+    digitalWrite(MOTOR_R_DIR, HIGH); // Reverse polarity
+  }
+
+  // Convert the -100/100 scale to 0-255 using absolute values (abs)
+  analogWrite(MOTOR_L_PWM, (abs(Leftspeed) * 255) / 100); 
+  analogWrite(MOTOR_R_PWM, (abs(RightSpeed) * 255) / 100);
+}
+
+// ==========================================
+// WRAPPER FUNCTIONS (All automatically support negative values now!)
+// ==========================================
+
+void tl(int speed) { fd2(speed, 0); }               // Turn Left (Pivot on left wheel)
+void tr(int speed) { fd2(0, speed); }               // Turn Right (Pivot on right wheel)
+void sl(int speed) { fd2(-speed, speed); }          // Spin Left (Tank turn)
+void sr(int speed) { fd2(speed, -speed); }          // Spin Right (Tank turn)
+void bk(int speed) { fd2(-speed, -speed); }         // Backward
+
+// Stop all motors
+void ao(){
+  delay(100);
+  analogWrite(MOTOR_L_PWM, 0);
+  analogWrite(MOTOR_R_PWM, 0);
+  delay(100);
+}
+
+// ==========================================
+// SENSORS & LINE TRACKING
+// ==========================================
+
+void readSensors(){
+  for (int i = 0; i < NUM_SENSORS; i++) {
+    int val = analogRead(sensorsPins[i]);
+    Serial.print("S");
+    Serial.print(i + 1); 
+    Serial.print(":");
+    Serial.print(val);
+    Serial.print("\t");  
+  }
+  Serial.println(); 
+  delay(100);       
+}
+
+void followUntilLine(int speed){
+  while(1){
+    if (analogRead(sensorsPins[1]) > sensorsRef[1] && analogRead(sensorsPins[3]) > sensorsRef[3]){
+      break;
+    } else {
+      fd2(speed,speed);
+    }
+  }
+  ao();
+}
+
+void followLine(int speed){
+  if (analogRead(sensorsPins[1]) < sensorsRef[1] && analogRead(sensorsPins[2]) < sensorsRef[2]) {
+    fd2(speed,speed);
+  }
+  else if (analogRead(sensorsPins[1]) > sensorsRef[1] && analogRead(sensorsPins[2]) < sensorsRef[2]) {
+    tr(50); 
+  }                            
+  else if (analogRead(sensorsPins[1]) < sensorsRef[1] && analogRead(sensorsPins[2]) > sensorsRef[2]) {
+    tl(50); 
+  }    
+  else{
+    fd2(speed,speed);
+  }                        
+}
+
+void turnLeft(int speed){
+  sl(100);
+  delay(100);
+  ao();
+  while(1){
+    if(analogRead(sensorsPins[1]) > sensorsRef[1]){
+      break;
+    }
+    else sl(speed);
+  }
+  ao();
+}
+
+void turnRight(int speed){
+  sr(100);
+  delay(100);
+  ao();
+  while(1){
+    if(analogRead(sensorsPins[2]) > sensorsRef[2]){
+      break;
+    }
+    else sr(speed);
+  }
+  ao();
+}
+
+void turnLeftLine(int speed){
+  while(1){
+    if(analogRead(sensorsPins[1]) > sensorsRef[1]){
+      break;
+    }
+    else { tl(speed); }
+  }
+  ao();
+}
+
+void trac_CR(int speed){
+  while(1){
+    if(analogRead(sensorsPins[3]) > sensorsRef[3]){
+      break;
+    }
+    else { followLine(speed); }
+  }
+  ao();
+}
+
+void trac_CL(int speed){
+  while(1){
+    if(analogRead(sensorsPins[0]) > sensorsRef[0]){
+      break;
+    }
+    else { followLine(speed); }
+  }
+  ao();
+}
+
+void trac_cross(int speed){
+  while(1){
+    if(analogRead(sensorsPins[0]) > sensorsRef[0] && analogRead(sensorsPins[3]) > sensorsRef[3]){
+      break;
+    }
+    else { followLine(speed); }
+  }
+  ao();
+}
+
+
+// ==========================================
+// UTILITY FUNCTIONS
+// ==========================================
+
+void fowardDelay(int speed, int delayMS){
+  ao();
+  fd2(speed, speed);
+  delay(delayMS);
+  ao();
+}
+
+void fowardLineSkip(){
+  fd2(100,100);
+  delay(DEFAULT_LINE_SKIP); 
+  ao();
+}
+
+void beep(){
+  digitalWrite(HORN_PIN, HIGH); 
+  delay(500); 
+  digitalWrite(HORN_PIN, LOW);
+}

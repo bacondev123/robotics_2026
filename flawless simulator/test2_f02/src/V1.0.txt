@@ -1,0 +1,415 @@
+#include <string.h>
+#include <stdlib.h> 
+#include <ctype.h>
+
+// ==========================================
+// HARDWARE PINS & CONSTANTS
+// ==========================================
+constexpr uint8_t MOTOR_L_PWM = 9;  
+constexpr uint8_t MOTOR_L_DIR = 7;
+constexpr uint8_t MOTOR_R_PWM = 10; 
+constexpr uint8_t MOTOR_R_DIR = 4;
+constexpr uint8_t HORN_PIN    = 8;
+constexpr uint8_t GRABBER_PIN = 5;
+constexpr uint8_t OBJ_SENSOR_PIN = A5;
+
+// ==== SENSORS CONFIG ====
+constexpr int NUM_SENSORS = 4;
+constexpr uint8_t sensorPins[NUM_SENSORS] = {A0, A1, A2, A3}; 
+constexpr int sensorRef[NUM_SENSORS] = {511, 511, 511, 511};
+int sensorValue[NUM_SENSORS] = {0, 0, 0, 0}; 
+
+// ==== SYSTEM CONFIG ====
+constexpr int CENTER_POS = 1500;
+constexpr int MAX_POS = 3000;
+constexpr int MIN_POS = 0;
+constexpr int TURN_DELAY_MS = 50;
+constexpr int LOOP_DELAY_MS = 50;
+constexpr int LINE_SKIP_MS = 475;
+constexpr int SMALL_LINE_SKIP_MS = 150;
+
+// ==== PID GLOBALS ====
+float cumulativeIntegral = 0;
+float preCalcError = 0;
+float currentError = 0;
+float cachedLinePos = 1500.0;
+float systemPacingPwm = 15.0;  
+
+// ==========================================
+// HARDWARE CONTROL (MOTORS & ACTUATORS)
+// ==========================================
+void setMotors(int leftSpeed, int rightSpeed) {
+  leftSpeed = constrain(leftSpeed, -100, 100);
+  rightSpeed = constrain(rightSpeed, -100, 100);
+
+  digitalWrite(MOTOR_L_DIR, leftSpeed >= 0 ? LOW : HIGH);
+  digitalWrite(MOTOR_R_DIR, rightSpeed >= 0 ? LOW : HIGH);
+
+  analogWrite(MOTOR_L_PWM, (abs(leftSpeed) * 255) / 100); 
+  analogWrite(MOTOR_R_PWM, (abs(rightSpeed) * 255) / 100);
+}
+
+void stopMotors() { 
+  setMotors(0, 0); 
+}
+
+void beep() {
+  digitalWrite(HORN_PIN, HIGH); 
+  delay(500); 
+  digitalWrite(HORN_PIN, LOW);
+}
+
+void grabberUp()   { digitalWrite(GRABBER_PIN, HIGH); }
+void grabberDown() { digitalWrite(GRABBER_PIN, LOW); }
+
+// ==========================================
+// SENSOR LOGIC
+// ==========================================
+void updateSensors() {
+  for (int i = 0; i < NUM_SENSORS; i++) {
+    sensorValue[i] = analogRead(sensorPins[i]);
+  }
+}
+
+// Simulator Logic: High value (>= ref) is Black, Low value (< ref) is White
+bool isBlack(int idx) { return sensorValue[idx] >= sensorRef[idx]; }
+bool isWhite(int idx) { return sensorValue[idx] < sensorRef[idx]; }
+
+bool isCrossFound() {
+  updateSensors();
+  return isBlack(0) && isBlack(3);
+}
+
+// ==========================================
+// PID MATH & ESTIMATION
+// ==========================================
+void resetPID() {
+  cumulativeIntegral = 0;
+  currentError = 0;
+  preCalcError = 0;
+  systemPacingPwm = 15.0;
+}
+
+float computePID(float Kp, float Ki, float Kd, float dt) {
+  float pTerm = currentError;
+
+  if (abs(currentError) <= 1) { 
+    cumulativeIntegral += currentError * dt;
+    cumulativeIntegral = constrain(cumulativeIntegral, -100, 100);
+  } else {
+    cumulativeIntegral = 0;
+  }
+
+  float dTerm = constrain((currentError - preCalcError) / dt, -150.0, 150.0);
+  return (Kp * pTerm) + (Ki * cumulativeIntegral) + (Kd * dTerm);
+}
+
+float estimateLinePosition() { 
+  long spatialSum = 0;
+  long totalWeight = 0;
+
+  for (int i = 0; i < NUM_SENSORS; i++) {
+    long intensity = sensorValue[i] - sensorRef[i]; // Flipped for Simulator logic
+    if (intensity > 0) {
+      spatialSum += (intensity * (i * 1000L));
+      totalWeight += intensity;
+    }
+  }
+
+  float center = 1500.0;  
+
+  if (totalWeight <= 0) {
+    if (cachedLinePos >= (CENTER_POS - 250) && cachedLinePos <= (CENTER_POS + 250)) center = CENTER_POS;
+    else if (cachedLinePos < (CENTER_POS - 250)) center = MIN_POS;
+    else center = MAX_POS;
+    cachedLinePos = center; 
+  } else {
+    center = (float)spatialSum / (float)totalWeight;
+    cachedLinePos = (cachedLinePos * 0.6) + (center * 0.4);
+  }
+  return cachedLinePos;
+}
+
+// ==========================================
+// CORE MOVEMENT ENGINE
+// ==========================================
+void followLinePID(float targetSpeed, float Kp, float Ki, float Kd) {
+  const unsigned long TICK_US = 5000;
+  static unsigned long lastTick = micros(); 
+  unsigned long now = micros();
+  
+  if(now - lastTick > 1000000){ lastTick = now; return; }
+
+  if (now - lastTick >= TICK_US) {
+    float dt = (now - lastTick) / 1000000.0;
+    if (dt <= 0) dt = 0.001;
+    if (dt > 0.05) dt = 0.005;
+    lastTick = now;
+
+    updateSensors();
+    float linePos = estimateLinePosition();  
+    currentError = (linePos - CENTER_POS) / 500.0;
+
+    float curveSharpness = abs(currentError - preCalcError);
+    float gForceSeverity = (abs(currentError) * 7.5f) + (curveSharpness * 10.0f);
+    float requiredDamping = targetSpeed - gForceSeverity;
+
+    float stallVelocity = (abs(currentError) >= 2) ? -25.0f : ((abs(currentError) >= 1) ? -12.5f : 14.0f);
+    requiredDamping = constrain(requiredDamping, stallVelocity, targetSpeed);
+
+    if (systemPacingPwm < requiredDamping) {
+      systemPacingPwm = min(systemPacingPwm + 0.4f, requiredDamping);
+    } else if (systemPacingPwm > requiredDamping) {
+      systemPacingPwm = max(systemPacingPwm - 2.0f, requiredDamping);
+    }
+
+    float turnOffset = computePID(Kp, Ki, Kd, dt);
+    setMotors(systemPacingPwm + turnOffset, systemPacingPwm - turnOffset);
+    preCalcError = currentError;
+  }
+}
+
+void driveForwardProfile(int maxSpeed, unsigned long durationMs) {
+  int minSpeed = 15;
+  int spoolTime = 150;                           
+  int brakeTime = 150;                         
+  unsigned long start = millis();
+
+  while (true) {
+    unsigned long elapsed = millis() - start;
+    if (elapsed >= durationMs) break;
+
+    unsigned long remaining = durationMs - elapsed;
+    int outSpeed = minSpeed;  
+
+    if (elapsed <= spoolTime) outSpeed = minSpeed + (elapsed * (maxSpeed - minSpeed) / spoolTime);
+    else if (remaining <= brakeTime) outSpeed = max(minSpeed, minSpeed + (int)(remaining * (maxSpeed - minSpeed) / brakeTime));
+    else outSpeed = maxSpeed;
+
+    setMotors(outSpeed, outSpeed + 2); // Slight right bias mapping
+  }
+  stopMotors();
+  resetPID();
+  delay(LOOP_DELAY_MS);
+}
+
+void driveForward(unsigned long durationMs) {
+  driveForwardProfile(20, durationMs); 
+}
+
+// ==========================================
+// INTERSECTION & SENSOR TARGETING
+// ==========================================
+void followUntilSensor(int sensorIdx) {
+  int hitCount = 0; 
+  while (true) {
+    updateSensors();
+    if (isBlack(sensorIdx)) {
+      if (++hitCount >= 2) break; 
+    } else {
+      hitCount = 0; 
+      followLinePID(20.0, 3.0, 0.5, 0.02);
+    }
+  }
+  stopMotors();
+  delay(LOOP_DELAY_MS);
+}
+
+void followUntilIntersection() {
+  int hitCount = 0;
+  while (true) {
+    if (isCrossFound()) {
+      if (++hitCount >= 2) break;
+    } else {
+      hitCount = 0;
+      followLinePID(30.0, 4.0, 0.1, 0.03);
+    }
+  }
+  stopMotors();
+  resetPID();
+  delay(LOOP_DELAY_MS);
+}
+
+void crossIntersectionBlind(float Kp, float Ki, float Kd, unsigned long escapeTimeMs) {
+  unsigned long start = millis();
+  int hitCount = 0;
+
+  while (true) {
+    if (isCrossFound() && (millis() - start > 250)) {
+      if (++hitCount >= 2) break;  
+    } else {
+      hitCount = 0;
+      followLinePID(35.0, Kp, Ki, Kd);
+    }
+  }
+
+  unsigned long blindTimer = millis();
+  while (millis() - blindTimer < escapeTimeMs) {
+    setMotors(35, 37); 
+  }
+  
+  stopMotors();
+  resetPID();
+  delay(LOOP_DELAY_MS);
+}
+
+void skipSideLines(int passCount, int sensorIdx) {
+  for (int i = 0; i < passCount; i++) {
+    driveForwardProfile(20, SMALL_LINE_SKIP_MS);
+    followUntilSensor(sensorIdx);
+    driveForward(LINE_SKIP_MS);
+  }
+  stopMotors();
+  delay(LOOP_DELAY_MS);
+}
+
+void skipIntersections(int passCount) {
+  for (int i = 0; i < passCount; i++) {
+    driveForwardProfile(20, SMALL_LINE_SKIP_MS);
+    followUntilIntersection();
+    driveForward(LINE_SKIP_MS);
+  }
+  stopMotors();
+  delay(LOOP_DELAY_MS);
+}
+
+// ==========================================
+// ROTATION LOGIC
+// ==========================================
+void turnLeftToLine(int speed, int targetSensor) {
+  setMotors(-speed, speed);
+  delay(50); // Blind thrust to escape current line
+
+  while (true) { updateSensors(); if (isWhite(targetSensor)) break; }
+  delay(TURN_DELAY_MS);
+  while (true) { updateSensors(); if (isBlack(targetSensor)) break; }
+
+  setMotors(speed, -speed); delay(15); // Active braking
+  stopMotors(); delay(40);
+  resetPID();
+}
+
+void turnRightToLine(int speed, int targetSensor) {
+  setMotors(speed, -speed);
+  delay(50); 
+
+  while (true) { updateSensors(); if (isWhite(targetSensor)) break; }
+  delay(TURN_DELAY_MS);
+  while (true) { updateSensors(); if (isBlack(targetSensor)) break; }
+
+  setMotors(-speed, speed); delay(15); 
+  stopMotors(); delay(40);
+  resetPID();
+}
+
+void turnLeftSkipLines(int speed, int targetSensor, int skipAmount) {
+  setMotors(-speed, speed);
+  delay(50); 
+
+  for (int i = 1; i <= skipAmount; i++) {
+    while (true) { updateSensors(); if (isWhite(targetSensor)) break; }
+    if (i < skipAmount) delay(TURN_DELAY_MS);
+    while (true) { updateSensors(); if (isBlack(targetSensor)) break; }
+    if (i < skipAmount) delay(TURN_DELAY_MS);
+  }
+
+}
+
+void turnRightSkipLines(int speed, int targetSensor, int skipAmount) {
+  setMotors(speed, -speed);
+  delay(50); 
+
+  for (int i = 1; i <= skipAmount; i++) {
+    while (true) { updateSensors(); if (isWhite(targetSensor)) break; }
+    if (i < skipAmount) delay(TURN_DELAY_MS);
+    while (true) { updateSensors(); if (isBlack(targetSensor)) break; }
+    if (i < skipAmount) delay(TURN_DELAY_MS);
+  }
+}
+
+// ==========================================
+// PATH EXECUTION ENGINE
+// ==========================================
+void executePath(const char* pathStr) {
+  char pathBuffer[64];
+  strncpy(pathBuffer, pathStr, sizeof(pathBuffer) - 1);
+  pathBuffer[sizeof(pathBuffer) - 1] = '\0'; // Ensure null termination
+  
+  char* command = strtok(pathBuffer, " ");
+
+  while (command != NULL) {
+    int cmdLen = strlen(command);
+    char firstChar = command[0];
+    char lastChar = command[cmdLen - 1];
+
+    if (cmdLen >= 2 && isdigit(firstChar) && lastChar == 'W') {
+      int driveTime = atoi(command);
+      if (driveTime <= 9) driveTime *= 100;
+      driveForward(driveTime);
+    }
+    else if (cmdLen == 1) {
+      if (firstChar == 'S') skipIntersections(1);
+      else if (firstChar == 'T') followUntilIntersection();
+      else if (firstChar == 'w') driveForward(300);
+      else if (firstChar == 'W') driveForward(400);
+    }
+    else if (cmdLen == 2) {
+      char actionType = command[0];
+      int sensorIdx = command[1] - '0';
+      if (sensorIdx < 0 || sensorIdx > 9) sensorIdx = 0; 
+
+      if (actionType == 'T') followUntilSensor(sensorIdx);
+      else if (actionType == 'S') skipSideLines(1, sensorIdx);
+      else if (actionType == 'L') turnLeftToLine(30, sensorIdx);
+      else if (actionType == 'R') turnRightToLine(30, sensorIdx);
+    }
+    else if (cmdLen == 3) {
+      int skipCount = command[0] - '0';
+      char actionType = command[1];
+      int sensorIdx = command[2] - '0';
+
+      if (skipCount < 1 || skipCount > 9) skipCount = 1;
+      if (sensorIdx < 0 || sensorIdx > 9) sensorIdx = 0;
+
+      if (actionType == 'L') turnLeftSkipLines(30, sensorIdx, skipCount);
+      else if (actionType == 'R') turnRightSkipLines(30, sensorIdx, skipCount);
+    }
+    command = strtok(NULL, " ");
+  }
+}
+
+// ==========================================
+// MISSIONS
+// ==========================================
+void missionB1() {
+  crossIntersectionBlind(4.0, 0.1, 0.03, 0);
+}
+
+void missionB4(const char* variation) {
+  if (strcmp(variation, "R") == 0) executePath("w 1R2 T w 1R1 W");
+  else if (strcmp(variation, "2R") == 0) executePath("w 1R2 T w 1L2 T w 1R1 W");
+  else if (strcmp(variation, "C2R") == 0) executePath("w 1R2 T w 1R2 T3 w 1R1 W");
+}
+
+// ==========================================
+// SETUP & LOOP
+// ==========================================
+void setup() {
+  Serial.begin(9600);
+  
+  pinMode(MOTOR_L_PWM, OUTPUT); pinMode(MOTOR_L_DIR, OUTPUT);
+  pinMode(MOTOR_R_PWM, OUTPUT); pinMode(MOTOR_R_DIR, OUTPUT);
+  pinMode(HORN_PIN, OUTPUT);
+  pinMode(GRABBER_PIN, OUTPUT);
+
+  beep();
+  delay(1000);
+
+  // Example Execution:
+  // executePath("T W 1L1 T W");
+  // missionB4("2R");
+}
+
+void loop() {
+  // Empty loop - logic is handled sequentially in setup() or missions
+}

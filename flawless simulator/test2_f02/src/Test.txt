@@ -1,0 +1,291 @@
+// ==========================================
+// HARDWARE PINS & CONSTANTS
+// ==========================================
+constexpr uint8_t MOTOR_L_PWM = 9;  
+constexpr uint8_t MOTOR_L_DIR = 7;
+constexpr uint8_t MOTOR_R_PWM = 10; 
+constexpr uint8_t MOTOR_R_DIR = 4;
+constexpr uint8_t HORN_PIN    = 8;
+constexpr uint8_t GRABBER_PIN = 5;
+constexpr uint8_t OBJ_SENSOR_PIN = A5;
+
+constexpr int DEFAULT_LINE_SKIP = 180;
+constexpr int TURN_DELAY_MS = 10; // Debounce delay for line detection
+constexpr int NUM_SENSORS = 4;
+
+// Sensors: 0=Left-most, 1=Middle-Left, 2=Middle-Right, 3=Right-most
+constexpr uint8_t sensorsPins[NUM_SENSORS] = {A0, A1, A2, A3}; 
+constexpr int sensorsRef[NUM_SENSORS] = {511, 511, 511, 511};
+
+// Global array to store current sensor values
+int sensorValue[NUM_SENSORS] = {0, 0, 0, 0}; 
+
+// ==========================================
+// SETUP & LOOP
+// ==========================================
+void setup() {
+  Serial.begin(9600);
+  
+  pinMode(MOTOR_L_PWM, OUTPUT); pinMode(MOTOR_L_DIR, OUTPUT);
+  pinMode(MOTOR_R_PWM, OUTPUT); pinMode(MOTOR_R_DIR, OUTPUT);
+  pinMode(HORN_PIN, OUTPUT);
+  pinMode(GRABBER_PIN, OUTPUT);
+
+  // --- Execution Sequence ---
+  trac_CR(100);
+  delay(1000);
+  keep_up();
+  getObjVal();
+  delay(500);
+  trac_cross(100);
+  ao();
+  delay(500);
+  keep_down();
+  delay(300);
+  backwardDelay(100, 300);
+
+  /* 
+  // Alternative sequence
+  trac_CR(100);
+  forwardDelay(100, DEFAULT_LINE_SKIP);
+  readSensors();
+  turnRight(100);
+  trac_cross(100);
+  forwardDelay(100, DEFAULT_LINE_SKIP);
+  turnLeft(100);
+  trac_cross(100);
+  forwardLineSkip();
+  trac_cross(100);
+  forwardLineSkip();
+  turnLeft(100);
+  */
+}
+
+void loop() {
+  // readSensors();
+  // delay(250);
+}
+
+// ==========================================
+// CORE MOVEMENT ENGINE
+// ==========================================
+void fd2(int leftSpeed, int rightSpeed) {
+  // Constrain limits to prevent values outside -100 to +100
+  leftSpeed = constrain(leftSpeed, -100, 100);
+  rightSpeed = constrain(rightSpeed, -100, 100);
+
+  // Set motor directions using ternary operators for cleaner code
+  digitalWrite(MOTOR_L_DIR, leftSpeed >= 0 ? LOW : HIGH);
+  digitalWrite(MOTOR_R_DIR, rightSpeed >= 0 ? LOW : HIGH);
+
+  // Convert the -100/100 scale to 0-255 using absolute values
+  analogWrite(MOTOR_L_PWM, (abs(leftSpeed) * 255) / 100); 
+  analogWrite(MOTOR_R_PWM, (abs(rightSpeed) * 255) / 100);
+}
+
+// Stop all motors
+void ao() {
+  analogWrite(MOTOR_L_PWM, 0);
+  analogWrite(MOTOR_R_PWM, 0);
+}
+
+// Movement Wrappers
+void tl(int speed) { fd2(speed, 0); }        // Turn Left (Pivot on left wheel)
+void tr(int speed) { fd2(0, speed); }        // Turn Right (Pivot on right wheel)
+void sl(int speed) { fd2(-speed, speed); }   // Spin Left (Tank turn)
+void sr(int speed) { fd2(speed, -speed); }   // Spin Right (Tank turn)
+void bk(int speed) { fd2(-speed, -speed); }  // Backward
+
+// ==========================================
+// SENSORS & LINE DETECTION HELPERS
+// ==========================================
+
+// FAST & SILENT: Reads sensor hardware at maximum speed
+void updateSensors() {
+  for (int i = 0; i < NUM_SENSORS; i++) {
+    sensorValue[i] = analogRead(sensorsPins[i]);
+  }
+}
+
+// DIAGNOSTIC ONLY: Slow function for manual diagnostics with serial prints
+void readSensors() {
+  for (int i = 0; i < NUM_SENSORS; i++) {
+    sensorValue[i] = analogRead(sensorsPins[i]);
+    Serial.print("S"); Serial.print(i); Serial.print(":");
+    Serial.print(sensorValue[i]); Serial.print("\t");  
+  }
+  Serial.println(); 
+  delay(1);       
+}
+
+int getObjVal() {
+  int objVal = analogRead(OBJ_SENSOR_PIN);
+  Serial.print("A5:");
+  Serial.println(objVal); 
+  return objVal; 
+}
+
+// Sensor Logic: Low value (< reference) is White, High value (>= reference) is Black
+bool isWhite(int sensorIndex) { return sensorValue[sensorIndex] < sensorsRef[sensorIndex]; }
+bool isBlack(int sensorIndex) { return sensorValue[sensorIndex] >= sensorsRef[sensorIndex]; }
+
+// ==========================================
+// ROTATION / PIVOT LOGIC
+// ==========================================
+
+void turnLeft(int speed) {
+  sl(100); delay(100); ao();
+  while (analogRead(sensorsPins[1]) <= sensorsRef[1]) sl(speed);
+  ao();
+  while (analogRead(sensorsPins[2]) <= sensorsRef[2]) sl(speed);
+  ao();
+}
+
+void turnRight(int speed) {
+  sr(100); delay(100); ao();
+  while (analogRead(sensorsPins[2]) <= sensorsRef[2]) sr(speed);
+  ao();
+  while (analogRead(sensorsPins[1]) <= sensorsRef[1]) sr(speed);
+  ao();
+}
+
+void pivotLeftToLine(int turnCommandSpeed, int targetSensorIndex) {
+  sl(turnCommandSpeed);
+  delay(50); // Blind thrust to escape current line
+
+  while (true) { updateSensors(); if (isWhite(targetSensorIndex)) break; }
+  delay(TURN_DELAY_MS);
+  while (true) { updateSensors(); if (isBlack(targetSensorIndex)) break; }
+  ao();               
+}
+
+void pivotRightToLine(int turnCommandSpeed, int targetSensorIndex) {
+  sr(turnCommandSpeed);
+  delay(50); 
+
+  while (true) { updateSensors(); if (isWhite(targetSensorIndex)) break; }
+  delay(TURN_DELAY_MS);
+  while (true) { updateSensors(); if (isBlack(targetSensorIndex)) break; }
+  ao();               
+}
+
+void pivotLeftSkipLines(int turnCommandSpeed, int targetSensorIndex, int lineSkipAmount) {
+  sl(turnCommandSpeed);
+  delay(50); 
+
+  for (int i = 1; i <= lineSkipAmount; i++) {
+    while (true) { updateSensors(); if (isWhite(targetSensorIndex)) break; }
+    if (i < lineSkipAmount) delay(TURN_DELAY_MS);
+    while (true) { updateSensors(); if (isBlack(targetSensorIndex)) break; }
+    if (i < lineSkipAmount) delay(TURN_DELAY_MS);
+  }
+  ao();               
+}
+
+void pivotRightSkipLines(int turnCommandSpeed, int targetSensorIndex, int lineSkipAmount) {
+  sr(turnCommandSpeed);
+  delay(50); 
+
+  for (int i = 1; i <= lineSkipAmount; i++) {
+    while (true) { updateSensors(); if (isWhite(targetSensorIndex)) break; }
+    if (i < lineSkipAmount) delay(TURN_DELAY_MS);
+    while (true) { updateSensors(); if (isBlack(targetSensorIndex)) break; }
+    if (i < lineSkipAmount) delay(TURN_DELAY_MS);
+  }
+  ao();               
+}
+
+// ==========================================
+// LINE TRACKING
+// ==========================================
+
+void followUntilLine(int speed) {
+  while (true) {
+    updateSensors(); 
+    if (sensorValue[1] > sensorsRef[1] && sensorValue[3] > sensorsRef[3]) break;
+    fd2(speed, speed);
+  }
+  ao();
+}
+
+void followLine(int speed) {
+  updateSensors(); 
+  if (sensorValue[1] < sensorsRef[1] && sensorValue[2] < sensorsRef[2]) {
+    fd2(speed, speed);
+  } else if (sensorValue[1] > sensorsRef[1] && sensorValue[2] < sensorsRef[2]) {
+    tr(50); 
+  } else if (sensorValue[1] < sensorsRef[1] && sensorValue[2] > sensorsRef[2]) {
+    tl(50); 
+  } else {
+    fd2(speed, speed);
+  }                        
+}
+
+void turnLeftLine(int speed) {
+  while (true) {
+    updateSensors();
+    if (sensorValue[1] > sensorsRef[1]) break;
+    tl(speed);
+  }
+  ao();
+}
+
+void trac_CR(int speed) {
+  while (true) {
+    updateSensors();
+    if (sensorValue[3] > sensorsRef[3]) break;
+    followLine(speed);
+  }
+  ao();
+}
+
+void trac_CL(int speed) {
+  while (true) {
+    updateSensors();
+    if (sensorValue[0] > sensorsRef[0]) break;
+    followLine(speed);
+  }
+  ao();
+}
+
+void trac_cross(int speed) {
+  while (true) {
+    updateSensors();
+    if (sensorValue[0] > sensorsRef[0] && sensorValue[3] > sensorsRef[3]) break;
+    followLine(speed);
+  }
+  ao();
+}
+
+// ==========================================
+// UTILITY FUNCTIONS
+// ==========================================
+
+void forwardDelay(int speed, int delayMS) {
+  ao();
+  fd2(speed, speed);
+  delay(delayMS);
+  ao();
+}
+
+void backwardDelay(int speed, int delayMS) {
+  ao();
+  fd2(-speed, -speed);
+  delay(delayMS);
+  ao();
+}
+
+void forwardLineSkip() {
+  fd2(100, 100);
+  delay(DEFAULT_LINE_SKIP); 
+  ao();
+}
+
+void beep() {
+  digitalWrite(HORN_PIN, HIGH); 
+  delay(500); 
+  digitalWrite(HORN_PIN, LOW);
+}
+
+void keep_up()   { digitalWrite(GRABBER_PIN, HIGH); }
+void keep_down() { digitalWrite(GRABBER_PIN, LOW); }
