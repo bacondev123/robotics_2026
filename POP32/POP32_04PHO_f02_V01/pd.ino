@@ -7,17 +7,17 @@
 
 
 #define CENTER_POS 1500.0
-#define MIN_POS    0.0
-#define MAX_POS    3000.0
+#define MIN_POS 0.0
+#define MAX_POS 3000.0
 
 float lastPosition = CENTER_POS;
-float lastError    = 0.0;
-float integral     = 0.0;
+float lastError = 0.0;
+float integral = 0.0;
 
 // Reset PID memory
 void resetPD() {
-  lastError    = 0.0;
-  integral     = 0.0;
+  lastError = 0.0;
+  integral = 0.0;
   lastPosition = CENTER_POS;
 }
 // ---------------------------------------------------------
@@ -28,17 +28,17 @@ void resetPD() {
 // Returns 0.0 (no ramp) if no optional arguments are passed
 float getRampOffset(unsigned long elapsed,
                     unsigned long totalDuration,
-                    float minOffset   = 0.0,
-                    float peakOffset  = 0.0,
+                    float minOffset = 0.0,
+                    float peakOffset = 0.0,
                     float rampUpRatio = 0.0,
-                    float holdRatio   = 0.0) {
+                    float holdRatio = 0.0) {
 
   // Safety / Default Guard: no duration, flat value, or zero ratios -> no ramp
   if (totalDuration == 0 || peakOffset == minOffset || (rampUpRatio <= 0.0 && holdRatio <= 0.0)) {
     return minOffset;
   }
 
-  float t       = constrain((float)elapsed / (float)totalDuration, 0.0, 1.0);
+  float t = constrain((float)elapsed / (float)totalDuration, 0.0, 1.0);
   float holdEnd = rampUpRatio + holdRatio;
   if (holdEnd > 1.0) {
     holdEnd = 1.0;
@@ -57,7 +57,7 @@ float getRampOffset(unsigned long elapsed,
 
   // Phase 3: Quick Decelerate (peakOffset -> minOffset)
   float decaySpan = 1.0 - holdEnd;
-  float progress  = (decaySpan > 0.0) ? ((t - holdEnd) / decaySpan) : 1.0;
+  float progress = (decaySpan > 0.0) ? ((t - holdEnd) / decaySpan) : 1.0;
   return peakOffset - (peakOffset - minOffset) * progress;
 }
 
@@ -67,14 +67,14 @@ void getRampOffsetsLR(unsigned long elapsed,
                       unsigned long totalDuration,
                       float &leftOut,
                       float &rightOut,
-                      float leftMin     = 0.0,
-                      float leftPeak    = 0.0,
-                      float rightMin    = 0.0,
-                      float rightPeak   = 0.0,
+                      float leftMin = 0.0,
+                      float leftPeak = 0.0,
+                      float rightMin = 0.0,
+                      float rightPeak = 0.0,
                       float rampUpRatio = 0.0,
-                      float holdRatio   = 0.0) {
+                      float holdRatio = 0.0) {
 
-  leftOut  = getRampOffset(elapsed, totalDuration, leftMin,  leftPeak,  rampUpRatio, holdRatio);
+  leftOut = getRampOffset(elapsed, totalDuration, leftMin, leftPeak, rampUpRatio, holdRatio);
   rightOut = getRampOffset(elapsed, totalDuration, rightMin, rightPeak, rampUpRatio, holdRatio);
 }
 // ---------------------------------------------------------
@@ -87,7 +87,7 @@ float getLinePosition() {
   long totalWeight = 0;
 
   for (int i = 0; i < NUM_SENSORS; i++) {
-    long weight = sensorRef[i] - sensorValue[i]; // Higher weight = more black
+    long weight = sensorRef[i] - sensorValue[i];  // Higher weight = more black
     if (weight > 0) {
       sum += (weight * (i * 1000L));
       totalWeight += weight;
@@ -97,9 +97,9 @@ float getLinePosition() {
   // Line Lost Memory: if no black detected, remember the last exit direction
   if (totalWeight <= 0) {
     if (lastPosition < (CENTER_POS - 250.0)) {
-      lastPosition = MIN_POS;       // Was on the far left
+      lastPosition = MIN_POS;  // Was on the far left
     } else if (lastPosition > (CENTER_POS + 250.0)) {
-      lastPosition = MAX_POS;       // Was on the far right
+      lastPosition = MAX_POS;  // Was on the far right
     } else {
       lastPosition = CENTER_POS;
     }
@@ -115,7 +115,7 @@ float getLinePosition() {
 // ---------------------------------------------------------
 void trackPD(float speed, float Kp, float Kd, float Ki = 0.0) {
   float position = getLinePosition();
-  
+
   // Normalize error: scale between -3.0 (Far Left) to +3.0 (Far Right)
   float error = (position - CENTER_POS) / 500.0;
 
@@ -127,7 +127,7 @@ void trackPD(float speed, float Kp, float Kd, float Ki = 0.0) {
     integral += error;
     integral = constrain(integral, -15.0, 15.0);
   } else {
-    integral = 0.0; 
+    integral = 0.0;
   }
   float I = Ki * integral;
 
@@ -137,10 +137,10 @@ void trackPD(float speed, float Kp, float Kd, float Ki = 0.0) {
   // Compute total motor differential power
   float power = P + I + D;
 
-  float leftSpeed  = speed + power;
+  float leftSpeed = speed + power;
   float rightSpeed = speed - power;
 
-  leftSpeed  = constrain(leftSpeed, -100.0, 100.0);
+  leftSpeed = constrain(leftSpeed, -100.0, 100.0);
   rightSpeed = constrain(rightSpeed, -100.0, 100.0);
 
   fd2(round(leftSpeed + MOTOR_BIAS), round(rightSpeed));
@@ -149,7 +149,7 @@ void trackPD(float speed, float Kp, float Kd, float Ki = 0.0) {
 }
 void trackPD_Left(float speed, float Kp, float Kd, float speedOffset) {
   float position = getLinePosition();
-  
+
   // Normalize error: scale between -3.0 (Far Left) to +3.0 (Far Right)
   float error = (position - CENTER_POS) / 500.0;
 
@@ -162,10 +162,10 @@ void trackPD_Left(float speed, float Kp, float Kd, float speedOffset) {
   // Compute total motor differential power
   float power = P + D;
 
-  float leftSpeed  = speed + power;
+  float leftSpeed = speed + power;
   float rightSpeed = speed - power;
 
-  leftSpeed  = constrain(leftSpeed, -100.0, 100.0);
+  leftSpeed = constrain(leftSpeed, -100.0, 100.0);
   rightSpeed = constrain(rightSpeed, -100.0, 100.0);
 
   fd2(round(leftSpeed + MOTOR_BIAS), round(rightSpeed + 10 + speedOffset));
@@ -174,7 +174,7 @@ void trackPD_Left(float speed, float Kp, float Kd, float speedOffset) {
 }
 void trackPD_Right(float speed, float Kp, float Kd, float speedOffset) {
   float position = getLinePosition();
-  
+
   // Normalize error: scale between -3.0 (Far Left) to +3.0 (Far Right)
   float error = (position - CENTER_POS) / 500.0;
 
@@ -187,10 +187,10 @@ void trackPD_Right(float speed, float Kp, float Kd, float speedOffset) {
   // Compute total motor differential power
   float power = P + D;
 
-  float leftSpeed  = speed + power;
+  float leftSpeed = speed + power;
   float rightSpeed = speed - power;
 
-  leftSpeed  = constrain(leftSpeed, -100.0, 100.0);
+  leftSpeed = constrain(leftSpeed, -100.0, 100.0);
   rightSpeed = constrain(rightSpeed, -100.0, 100.0);
 
   fd2(round(leftSpeed + MOTOR_BIAS + 10 + speedOffset), round(rightSpeed));
@@ -217,15 +217,15 @@ void trackPDLeft_Time(float speed,
                       float Kd,
                       unsigned long durationMs,
                       float speedOffset = 0.0,
-                      float minOffset   = 0.0,
+                      float minOffset = 0.0,
                       float rampUpRatio = 0.0,
-                      float holdRatio   = 0.0) {
+                      float holdRatio = 0.0) {
   resetPD();
   unsigned long startClock = millis();
 
   while (millis() - startClock < durationMs) {
     unsigned long elapsed = millis() - startClock;
-    float currentOffset   = speedOffset;
+    float currentOffset = speedOffset;
 
     // Activate ramp only when ramp ratios are provided
     if (rampUpRatio > 0.0 || holdRatio > 0.0) {
@@ -246,15 +246,15 @@ void trackPDRight_Time(float speed,
                        float Kd,
                        unsigned long durationMs,
                        float speedOffset = 0.0,
-                       float minOffset   = 0.0,
+                       float minOffset = 0.0,
                        float rampUpRatio = 0.0,
-                       float holdRatio   = 0.0) {
+                       float holdRatio = 0.0) {
   resetPD();
   unsigned long startClock = millis();
 
   while (millis() - startClock < durationMs) {
     unsigned long elapsed = millis() - startClock;
-    float currentOffset   = speedOffset;
+    float currentOffset = speedOffset;
 
     // Activate ramp only when ramp ratios are provided
     if (rampUpRatio > 0.0 || holdRatio > 0.0) {
@@ -273,7 +273,7 @@ void trackPDRight_Time(float speed,
 void trackPD_Offset(float speed,
                     float Kp,
                     float Kd,
-                    float leftOffset  = 0.0,
+                    float leftOffset = 0.0,
                     float rightOffset = 0.0) {
   float position = getLinePosition();
 
@@ -289,10 +289,10 @@ void trackPD_Offset(float speed,
   // Compute total motor differential power
   float power = P + D;
 
-  float leftSpeed  = speed + power;
+  float leftSpeed = speed + power;
   float rightSpeed = speed - power;
 
-  leftSpeed  = constrain(leftSpeed, -100.0, 100.0);
+  leftSpeed = constrain(leftSpeed, -100.0, 100.0);
   rightSpeed = constrain(rightSpeed, -100.0, 100.0);
 
   fd2(round(leftSpeed + MOTOR_BIAS + leftOffset), round(rightSpeed + rightOffset));
@@ -305,19 +305,19 @@ void trackPDLR_Time(float speed,
                     float Kp,
                     float Kd,
                     unsigned long durationMs,
-                    float leftMin     = 0.0,
-                    float leftPeak    = 0.0,
-                    float rightMin    = 0.0,
-                    float rightPeak   = 0.0,
+                    float leftMin = 0.0,
+                    float leftPeak = 0.0,
+                    float rightMin = 0.0,
+                    float rightPeak = 0.0,
                     float rampUpRatio = 0.0,
-                    float holdRatio   = 0.0) {
+                    float holdRatio = 0.0) {
   resetPD();
   unsigned long startClock = millis();
 
   while (millis() - startClock < durationMs) {
     unsigned long elapsed = millis() - startClock;
-    float leftOff         = leftPeak;
-    float rightOff        = rightPeak;
+    float leftOff = leftPeak;
+    float rightOff = rightPeak;
 
     if (rampUpRatio > 0.0 || holdRatio > 0.0) {
       getRampOffsetsLR(elapsed, durationMs,
@@ -339,7 +339,7 @@ void trackPDLR_Time(float speed,
 // ---------------------------------------------------------
 void trackPD_Cross(float speed, float Kp, float Kd, float Ki = 0.0) {
   resetPD();
-  
+
   while (!crossFound()) {
     trackPD(speed, Kp, Kd, Ki);
   }
@@ -349,7 +349,7 @@ void trackPD_Cross(float speed, float Kp, float Kd, float Ki = 0.0) {
 }
 void trackPD_Side(int sensorIdx, float speed, float Kp, float Kd, float Ki = 0.0) {
   resetPD();
-  
+
   while (isBlack(sensorIdx)) {
     trackPD(speed, Kp, Kd, Ki);
   }

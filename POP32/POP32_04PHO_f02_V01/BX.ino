@@ -97,25 +97,25 @@ void b613() {
   trackPDLeft_Time(20, 12, 3, 750, 5);
   // waitSW_OK();
   trackPDRight_Time(20, 12, 3, 750, 5);
-  trackPDLeft_Time(20,12,3,750, 5);
+  trackPDLeft_Time(20, 12, 3, 750, 5);
 }
 void b624() {
   // trackPDLeft_Time(20, 12, 3, 500, 20, 0, 0.3, 0.4);
   trackPDLeft_Time(20, 12, 3, 750, 5);
   trackPDRight_Time(20, 12, 3, 750, 5);
-  trackPDLeft_Time(20,12,3,750, 5);
+  trackPDLeft_Time(20, 12, 3, 750, 5);
 }
 void b631() {
   // trackPDLeft_Time(20, 12, 3, 500, 20, 0, 0.3, 0.4);
   trackPDLeft_Time(20, 12, 3, 750, 5);
   trackPDRight_Time(20, 12, 3, 750, 5);
-  trackPDLeft_Time(20,12,3,750, 5);
+  trackPDLeft_Time(20, 12, 3, 750, 5);
 }
 void b642() {
   // trackPDLeft_Time(20, 12, 3, 500, 20, 0, 0.3, 0.4);
   trackPDLeft_Time(20, 12, 3, 750, 5);
   trackPDRight_Time(20, 12, 3, 750, 5);
-  trackPDLeft_Time(20,12,3,750, 5);
+  trackPDLeft_Time(20, 12, 3, 750, 5);
 }
 void b614() {
   trackPDRight_Time(20, 12, 3, 1250);
@@ -131,5 +131,19 @@ void b643() {
 }
 
 void b712() {
-  trackPDLeft_Time(20, 12, 3, 750);
+  trackPDLeft_Time(20, 12, 3, 1000, 5);
+}
+void b723() {
+  trackPDLeft_Time(20, 12, 3, 1000, 5);
+}
+void b734() {
+  trackPDLeft_Time(20, 12, 3, 1000, 5);
+}
+void b741() {
+  trackPDLeft_Time(20, 12, 3, 1000, 5);
+}
+void b713() { // in experiment
+  trackPDLeft_Time(20, 12, 3, 750, 5);
+  // delay(500);
+  trackPDRight_Time(12, 6, 1.5, 750, 25, 0, 0.5, 0.2);
 }

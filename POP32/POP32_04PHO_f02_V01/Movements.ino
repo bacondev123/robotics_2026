@@ -118,14 +118,25 @@ void fowardDelay(int delayMS) {
   delay(delayMS);
   ao();
 }
-/*
+void backwardDelay(int delayMS) {
+  // Move forward for a custom amount of time (in milliseconds)
+  fd2(-DEFAULT_SPEED + MOTOR_BIAS, -DEFAULT_SPEED);
+  delay(delayMS);
+  ao();
+}
+
+void servo_drop(){
+  servo(1, 0); // servo 1 หมุนไปที่องศา 170
+  delay(1000);  // คอยเป็นเวลา 1 วินาที
+  servo(1, 90);  // servo 1 หมุนไปที่องศา 90
+}
+
 void keep_down() {
   servo_drop();
 }
 void keep_up() {
-  delay(3000);
+  delay(2500);
 }
-*/
 
 void fowardLineStop(int speed) {
   while (1) {
