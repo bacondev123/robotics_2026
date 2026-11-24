@@ -1,0 +1,519 @@
+#define TCS34725_ADDRESS 0x29
+#define TCS34725_COMMAND_BIT 0x80
+
+SoftI2C SoftWire1(25, 26);
+SoftI2C SoftWire2(27, 14);
+
+int last_distance = 0;
+
+void calibrateMinMax() {
+  unsigned long timer = millis();
+  for (byte i = 0; i < 8; i++) {
+    sensor_min[i] = 1023;
+    sensor_max[i] = 0;
+  }
+  motorWrite(1000, 1000, 1000, 1000);
+  while (1) {
+    for (byte i = 0; i < 8; i++) {
+      int sensor_value = adcRead(i);
+      if (sensor_value < sensor_min[i]) sensor_min[i] = sensor_value;
+      if (sensor_value > sensor_max[i]) sensor_max[i] = sensor_value;
+    }
+    if (millis() - timer > 2000) {
+      motorStop();
+      Serial.print("MIN: ");
+      for (byte i = 0; i < 8; i++) {
+        Serial.print(sensor_min[i]);
+        if (i < 7) Serial.print(", ");
+        else Serial.println();
+      }
+      Serial.print("MAX: ");
+      for (byte i = 0; i < 8; i++) {
+        Serial.print(sensor_max[i]);
+        if (i < 7) Serial.print(", ");
+        else Serial.println();
+      }
+      break;
+    }
+  }
+}
+
+void readLine() {
+  for (byte i = 0; i < 8; i++) {
+    line_value[i] = map(adcRead(i), sensor_min[i], sensor_max[i], 0, 100);
+    if (line_value[i] < 0) line_value[i] = 0;
+    else if (line_value[i] > 100) line_value[i] = 100;
+  }
+}
+void Line_Serial() {
+  while (1) {
+    readLine();
+    Serial.print(line_value[0]);
+    Serial.print("\n");
+    delay(100);
+  }
+}
+void ShowValue_Sensor() {
+  lcdClear();
+  bool IsPressed = false;
+  while (1) {
+    // readLine();
+    if (Serial.available() > 0) {
+      String Data = Serial.readStringUntil('\n'); Data.trim();
+      if (Data == "R") {if (IsPressed == false) {IsPressed = true;} else {IsPressed = false; Serial.println(">> Stopped!"); beep(100);}}
+    }
+    if (switchRead(A) == 1 || switchRead(B) == 1) {if (IsPressed == false) {IsPressed = true;} else {IsPressed = false; Serial.println(">> Stopped!"); beep(100);}}
+    if (IsPressed == true) {
+      int num_sensor = 8;
+      int sensor_values[num_sensor];  // สร้างตัวแปรแบบ Array เพื่อเก็บค่า Sensor
+      Serial.println("----------------------");
+      for (int i = 0; i < num_sensor; i++) {  // วนลูปอ่านค่า Sensor ทั้งหมด 6 ตัว
+        // sensor_values[i] = line_value[i];     // นำค่า Sensor แต่ละตัวเก็บไว้ในตัวแปร
+        sensor_values[i] = adcRead(i);  // นำค่า Sensor แต่ละตัวเก็บไว้ในตัวแปร
+        Serial.print("Sensor: ");
+        Serial.print(i);
+        Serial.print(" Value: ");
+        Serial.print(adcRead(i));
+        if (adcRead(i) < 250) {Serial.println(" Black");} else {Serial.println(" White");}
+      }
+      Serial.print("----------------------");
+      lcdDrawChart(sensor_values, num_sensor);  // แสดงกราฟค่าของ Sensor ทั้งหมด 8 ตัว การใช้งาน: lcdDrawChart(ค่าเซ็นเซอร์ [ตัวแปรแบบ Array], จำนวน Sensor)
+      // delay(100);
+    }
+  }
+}
+
+void sonarLoop(void* pvParameters) {
+  int TRIG_PIN, ECHO_PIN;
+  if (i2cDeviceExists(ICM20948_ADDRESS)) {
+    TRIG_PIN = 13;
+    ECHO_PIN = 4;
+  } else {
+    TRIG_PIN = 17;
+    ECHO_PIN = 16;
+  }
+  pinMode(TRIG_PIN, OUTPUT);
+  pinMode(ECHO_PIN, INPUT);
+  while (1) {
+    digitalWrite(TRIG_PIN, LOW);
+    delayMicroseconds(2);
+    digitalWrite(TRIG_PIN, HIGH);
+    delayMicroseconds(50);
+    digitalWrite(TRIG_PIN, LOW);
+    long duration = pulseIn(ECHO_PIN, HIGH);
+    // float distance = duration * 0.034 / 2;
+    // float distance = duration * 0.034;
+    float distance = duration * 1;
+    last_distance = distance;
+    vTaskDelay(10 / portTICK_PERIOD_MS);
+  }
+}
+
+float readSonar() {
+  return last_distance;
+}
+
+bool initVL53L0X() {
+  writeRegister(0x88, 0x00);
+  writeRegister(0x80, 0x01);
+  writeRegister(0xFF, 0x01);
+  writeRegister(0x00, 0x00);
+  writeRegister(0x91, 0x3C);
+  writeRegister(0x00, 0x01);
+  writeRegister(0xFF, 0x00);
+  writeRegister(0x80, 0x00);
+  return true;
+}
+
+void setMeasurementTimingBudget(uint32_t budget_us) {
+  uint32_t budget = budget_us * 1.065;
+  writeRegister16Bit(0x04, (budget >> 16) & 0xFFFF);
+  writeRegister16Bit(0x06, budget & 0xFFFF);
+}
+
+void setVcselPulsePeriod(uint8_t type, uint8_t period) {
+  uint8_t reg = (type == 0) ? 0x50 : 0x70;
+  writeRegister(reg, period);
+}
+
+float readCanDistance() {
+  writeRegister(0x00, 0x01);
+  delayMicroseconds(50);
+  Wire.beginTransmission(0x29);
+  Wire.write(0x1E);
+  Wire.endTransmission(true);
+  Wire.requestFrom(0x29, 2);
+  if (Wire.available() < 2) return -1.0;
+  int highByte = Wire.read();
+  int lowByte = Wire.read();
+  float can_distance = ((highByte << 8) | lowByte) - 50;
+  if (can_distance == -30.0f) can_distance = 8140.0f;
+  else if (can_distance < 0.0f) can_distance = 0.0f;
+  return can_distance;
+}
+
+void writeRegister(uint8_t reg, uint8_t value) {
+  Wire.beginTransmission(0x29);
+  Wire.write(reg);
+  Wire.write(value);
+  Wire.endTransmission();
+}
+
+void writeRegister16Bit(uint8_t reg, uint16_t value) {
+  Wire1.beginTransmission(0x29);
+  Wire1.write(reg);
+  Wire1.write((value >> 8) & 0xFF);
+  Wire1.write(value & 0xFF);
+  Wire1.endTransmission();
+}
+
+void setupDistanceSensor() {
+  // Wire.begin(25, 26);
+  Wire.setClock(400000);
+  initVL53L0X();
+  setMeasurementTimingBudget(50000);
+  setVcselPulsePeriod(0, 14);
+  setVcselPulsePeriod(1, 10);
+}
+
+void ShowDistanceSensor() {
+  vTaskResume(sonarTaskHandle);
+  delay(10);
+  while (1) {
+    Serial.print("Sonar: ");
+    Serial.print(readSonar());
+    Serial.print(" IR: ");
+    Serial.print(readCanDistance());
+    Serial.println();
+    delay(10);
+  }
+}
+void ShowDistanceSensorLCD() {
+  lcdClear();
+  vTaskResume(sonarTaskHandle);
+  delay(10);
+  while (1) {
+    Serial.print("Sonar: ");
+    Serial.print(readSonar());
+    Serial.println();
+    Serial.print(" IR: ");
+    Serial.print(readCanDistance());
+    Serial.println();
+    lcdPrintText(0, 0, "Sonar:", 0xffff);
+    lcdPrintText(50, 0, String(readSonar()) + "         ", 0xffff);
+    lcdPrintText(0, 25, "IR:", 0xffff);
+    lcdPrintText(50, 25, String(readCanDistance()) + "         ", 0xffff);
+    delay(100);
+    lcdClear();
+  }
+}
+
+void beepLogic(void* pvParameters) {
+  while (1) {  // ทำงานตลอดไป
+    // เช็คค่า Pitch จากตัวแปรที่ระบบอัปเดตให้
+    if (current_angles[ROLL] >= 15 && current_angles[ROLL] <= 30) {
+      beep(100);  // หรือคำสั่งทำเสียงของคุณ
+      tft.fillScreen(ST77XX_WHITE);
+      delay(200);
+      break;
+      // SelectMenu();
+    } else if (current_angles[ROLL] >= 330 && current_angles[ROLL] <= 340) {
+      beep(100);  // หรือคำสั่งทำเสียงของคุณ
+      tft.fillScreen(ST77XX_WHITE);
+      delay(200);
+      break;
+      // SelectMenu();
+    }
+    // else tft.fillScreen(ST77XX_BLACK);
+    vTaskDelay(100 / portTICK_PERIOD_MS);  // พัก 100ms (ประหยัดพลังงาน)
+  }
+  SelectMenu();
+}
+
+void write8(SoftI2C& wire, uint8_t reg, uint8_t value) {
+  wire.beginTransmission(TCS34725_ADDRESS);
+  wire.write(TCS34725_COMMAND_BIT | reg);
+  wire.write(value);
+  wire.endTransmission();
+}
+
+uint16_t read16(SoftI2C& wire, uint8_t reg) {
+  wire.beginTransmission(TCS34725_ADDRESS);
+  wire.write(TCS34725_COMMAND_BIT | reg);
+  wire.endTransmission();
+
+  wire.requestFrom(TCS34725_ADDRESS, 2);
+  uint16_t t = wire.read();
+  t |= wire.read() << 8;
+  return t;
+}
+
+void initSensor(SoftI2C& wire) {
+  write8(wire, 0x00, 0x01);
+  delay(3);
+  write8(wire, 0x00, 0x03);
+  delay(3);
+  write8(wire, 0x01, 0xD5);
+}
+
+void setupColorSensor() {
+  SoftWire1.begin();
+  SoftWire2.begin();
+  initSensor(SoftWire1);
+  initSensor(SoftWire2);
+}
+
+void readRGB(SoftI2C& wire, int crgb[4]) {
+  crgb[0] = read16(wire, 0x14);
+  crgb[1] = read16(wire, 0x16);
+  crgb[2] = read16(wire, 0x18);
+  crgb[3] = read16(wire, 0x1A);
+}
+
+void calibrateCanColor() {
+  int clear_color_left_cal;
+  int clear_color_right_cal;
+  int crgb[4];
+  lift(0);
+  while (!Serial)
+    ;
+
+  Serial.println("นำกระป๋องสีเหลืองวางที่มือด้านซ้าย แล้วกดปุ่ม B");
+  tft.fillScreen(ST77XX_BLACK);
+  lcdPrintText(0, 0, "Place 'Yellow Can' on Left Gripper, then Press B", 0xffff);
+  delay(300);
+  while (!switchRead(A) && !switchRead(B))
+    ;
+  beep(50);
+  servoWrite(chanal_Gripper_Left, Close_Left);
+  tft.fillScreen(ST77XX_BLACK);
+  lcdPrintText(0, 0, "Reading...", 0xffff);
+  delay(1000);
+  readRGB(SoftWire1, crgb);
+  clear_color_left_cal = crgb[0];
+  servoWrite(chanal_Gripper_Left, Open_Left);
+
+  Serial.println("นำกระป๋องสีเหลืองวางที่มือด้านขวา แล้วกดปุ่ม B");
+  tft.fillScreen(ST77XX_BLACK);
+  lcdPrintText(0, 0, "Place 'Yellow Can' on Right Gripper, then Press B", 0xffff);
+  delay(300);
+  while (!switchRead(A) && !switchRead(B))
+    ;
+  beep(50);
+  servoWrite(chanal_Gripper_Right, Close_Right);
+  tft.fillScreen(ST77XX_BLACK);
+  lcdPrintText(0, 0, "Reading...", 0xffff);
+  delay(1000);
+  readRGB(SoftWire2, crgb);
+  clear_color_right_cal = crgb[0];
+  servoWrite(chanal_Gripper_Right, Open_Right);
+
+  Serial.printf("clear_color_left: %d\n", clear_color_left_cal);
+  Serial.printf("clear_color_right: %d\n", clear_color_right_cal);
+  tft.fillScreen(ST77XX_BLACK);
+  lcdPrintText(0, 0, "Calibrated!", 0xffff);
+  lcdPrintText(0, 20, "Left Clear Color: " + String(clear_color_left_cal), 0xffff);
+  lcdPrintText(0, 30, "Right Clear Color: " + String(clear_color_right_cal), 0xffff);
+  lcdPrintText(0, 50, "Press A or B to return", 0xffff);
+  beep(50);
+  delay(50);
+  beep(50);
+  delay(50);
+  lift(3);
+  while (!switchRead(A) && !switchRead(B))
+    ;
+}
+
+// void calibrateCanColor() {
+//   int clear_color_left_cal;
+//   int clear_color_right_cal;
+//   int crgb[4];
+//   lift(0);
+//   while (!Serial)
+//     ;
+
+//   Serial.println("นำกระป๋องสีเหลืองวางที่มือด้านซ้าย แล้วกดปุ่ม B");
+//   tft.fillScreen(ST77XX_BLACK);
+//   lcdPrintText(0, 0, "Place 'Yellow Can' on Left Gripper, then Press B", 0xffff);
+//   delay(300);
+//   while (!switchRead(A) && !switchRead(B))
+//     ;
+//   beep(50);
+//   servoWrite(chanal_Gripper_Left, Close_Left);
+//   tft.fillScreen(ST77XX_BLACK);
+//   lcdPrintText(0, 0, "Reading...", 0xffff);
+//   delay(1000);
+//   readRGB(SoftWire1, crgb);
+//   clear_color_left_cal = crgb[0];
+//   servoWrite(chanal_Gripper_Left, Open_Left);
+
+//   Serial.println("นำกระป๋องสีเหลืองวางที่มือด้านขวา แล้วกดปุ่ม B");
+//   tft.fillScreen(ST77XX_BLACK);
+//   lcdPrintText(0, 0, "Place 'Yellow Can' on Right Gripper, then Press B", 0xffff);
+//   delay(300);
+//   while (!switchRead(A) && !switchRead(B))
+//     ;
+//   beep(50);
+//   servoWrite(chanal_Gripper_Right, Close_Right);
+//   tft.fillScreen(ST77XX_BLACK);
+//   lcdPrintText(0, 0, "Reading...", 0xffff);
+//   delay(1000);
+//   readRGB(SoftWire2, crgb);
+//   clear_color_right_cal = crgb[0];
+//   servoWrite(chanal_Gripper_Right, Open_Right);
+
+//   // ==================== AUTOMATIC SAVE START ====================
+//   // Open the "menu_cal" storage namespace in read/write mode
+//   prefs.begin("C_Color_Cal", false); 
+  
+//   // Save the integers using unique keys (Max 15 characters per key name)
+//   prefs.putInt("Col_L", clear_color_left_cal);
+//   prefs.putInt("Col_R", clear_color_right_cal);
+  
+//   prefs.end(); // Safely commit and close storage
+//   Serial.println("Calibration saved to flash memory successfully!");
+//   // ===================== AUTOMATIC SAVE END =====================
+
+//   Serial.printf("clear_color_left: %d\n", clear_color_left_cal);
+//   Serial.printf("clear_color_right: %d\n", clear_color_right_cal);
+//   tft.fillScreen(ST77XX_BLACK);
+//   lcdPrintText(0, 0, "Calibrated & Saved!", 0xffff); // Updated text
+//   lcdPrintText(0, 20, "Left Clear Color: " + String(clear_color_left_cal), 0xffff);
+//   lcdPrintText(0, 30, "Right Clear Color: " + String(clear_color_right_cal), 0xffff);
+//   lcdPrintText(0, 50, "Press A or B to return", 0xffff);
+//   beep(50);
+//   delay(50);
+//   beep(50);
+//   delay(50);
+//   lift(3);
+//   while (!switchRead(A) && !switchRead(B))
+//     ;
+// }
+
+char readColor(char gripper) {
+  if (gripper == 'l') {
+    int crgb[4];
+    readRGB(SoftWire1, crgb);
+
+    // เงื่อนไขที่ 1: เช็คจากค่า Clear ที่ Calibrate ไว้
+    if (crgb[0] >= (clear_color_left - 500)) {
+      tft.fillRect(0, 0, 80, 128, 0xffc0);  // สีเหลือง
+      return 'y';
+    } else {
+      if (crgb[1] > crgb[2]) {  // ถ้าค่าสีแดง > สีเขียว (เป็นไปได้ทั้ง แดง และ เหลือง)
+
+        // เงื่อนไขแก้ปัญหา: เช็คว่ามีสีเขียวผสมอยู่เยอะไหม (ถ้าเขียวมีค่ามากกว่า 50% ของแดง แปลว่าเป็นสีเหลือง)
+        // หมายเหตุ: ตัวเลข 0.5 (50%) สามารถปรับเพิ่ม/ลดได้ตามค่าจริงที่เซนเซอร์อ่านได้
+        if (crgb[2] > (crgb[1] * 0.5)) {
+          tft.fillRect(0, 0, 80, 128, 0xffc0);  // วาดจอเป็นสีเหลือง
+          return 'y';
+        } else {
+          tft.fillRect(0, 0, 80, 128, 0xf800);  // วาดจอเป็นสีแดง
+          return 'r';
+        }
+      } else if (crgb[2] > crgb[1]) {
+        tft.fillRect(0, 0, 80, 128, 0x1d40);  // วาดจอเป็นสีเขียว
+        return 'g';
+      } else {
+        tft.fillRect(0, 0, 80, 128, 0x0000);
+        return 'u';  // none
+      }
+    }
+
+  } else if (gripper == 'r') {
+    int crgb[4];
+    readRGB(SoftWire2, crgb);
+
+    // เงื่อนไขที่ 1: เช็คจากค่า Clear ที่ Calibrate ไว้
+    if (crgb[0] >= (clear_color_right - 500)) {
+      tft.fillRect(80, 0, 80, 128, 0xffc0);  // สีเหลือง
+      return 'y';
+    } else {
+      if (crgb[1] > crgb[2]) {  // ถ้าค่าสีแดง > สีเขียว
+
+        // เช็คสัดส่วนสีเขียวเทียบกับสีแดงสำหรับมือขวา
+        if (crgb[2] > (crgb[1] * 0.5)) {
+          tft.fillRect(80, 0, 80, 128, 0xffc0);  // วาดจอเป็นสีเหลือง
+          return 'y';
+        } else {
+          tft.fillRect(80, 0, 80, 128, 0xf800);  // วาดจอเป็นสีแดง
+          return 'r';
+        }
+      } else if (crgb[2] > crgb[1]) {
+        tft.fillRect(80, 0, 80, 128, 0x1d40);  // วาดจอเป็นสีเขียว
+        return 'g';
+      } else {
+        tft.fillRect(80, 0, 80, 128, 0x0000);
+        return 'u';
+      }
+    }
+  } else return 'u';
+}
+
+// char readColor(char gripper) {
+//   if (gripper == 'l') {
+//     int crgb[4];
+//     readRGB(SoftWire1, crgb);
+//     if (crgb[0] >= (clear_color_left - 500)) {
+//       tft.fillRect(0, 0, 80, 128, 0xffc0);
+//       return 'y';
+//     }
+//     else {
+//       if (crgb[1] > crgb[2]) {
+//         tft.fillRect(0, 0, 80, 128, 0xf800);
+//         return 'r';
+//       }
+//       else if (crgb[2] > crgb[1]) {
+//         tft.fillRect(0, 0, 80, 128, 0x1d40);
+//         return 'g';
+//       }
+//       else {
+//         tft.fillRect(0, 0, 80, 128, 0x0000);
+//         return 'u'; //none
+//       }
+//     }
+//   } else if (gripper == 'r') {
+//     int crgb[4];
+//     readRGB(SoftWire2, crgb);
+//     if (crgb[0] >= (clear_color_right - 500)) {
+//       tft.fillRect(80, 0, 80, 128, 0xffc0);
+//       return 'y';
+//     }
+//     else {
+//       if (crgb[1] > crgb[2]) {
+//         tft.fillRect(80, 0, 80, 128, 0xf800);
+//         return 'r';
+//       }
+//       else if (crgb[2] > crgb[1]) {
+//         tft.fillRect(80, 0, 80, 128, 0x1d40);
+//         return 'g';
+//       }
+//       else {
+//         tft.fillRect(80, 0, 80, 128, 0x0000);
+//         return 'u';
+//       }
+//     }
+//   } else return 'u';
+// }
+
+void STOP() {
+  motorStop();
+  while (!switchRead(A) && !switchRead(B))
+    ;
+  delay(500);
+}
+
+void CheckColLoop() {
+  delay(100);
+  while (1) {
+    readColor('r');
+    readColor('l');
+  }
+}
+void CheckColGrip() {
+  servoCloseLeft();
+  servoCloseRight();
+  delay(500);
+  readColor('r');
+  readColor('l');
+}
