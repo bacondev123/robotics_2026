@@ -53,6 +53,21 @@ void Line_Serial() {
     delay(100);
   }
 }
+
+void testSensorVal() {
+  lcdClear();
+  STOP();
+  while (1) {
+    // readLine();
+    int num_sensor = 8;
+    int sensor_values[num_sensor];          // สร้างตัวแปรแบบ Array เพื่อเก็บค่า Sensor
+    for (int i = 0; i < num_sensor; i++) {  // วนลูปอ่านค่า Sensor ทั้งหมด 6 ตัว
+      // sensor_values[i] = line_value[i];     // นำค่า Sensor แต่ละตัวเก็บไว้ในตัวแปร
+      sensor_values[i] = adcRead(i);  // นำค่า Sensor แต่ละตัวเก็บไว้ในตัวแปร
+    }
+    lcdDrawChart(sensor_values, num_sensor);  // แสดงกราฟค่าของ Sensor ทั้งหมด 8 ตัว การใช้งาน: lcdDrawChart(ค่าเซ็นเซอร์ [ตัวแปรแบบ Array], จำนวน Sensor)
+  }
+}
 void ShowValue_Sensor() {
   lcdClear();
   bool IsPressed = false;

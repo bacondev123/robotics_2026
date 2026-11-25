@@ -24,6 +24,12 @@ int clear_color_right = (4424+4899)/2;   // ค่าสีเหลืองม
 // int clear_color_right = .getInt("Col_R", ((4159+4028)/2));   // ค่าสีเหลืองมือจับด้านขวา
 // .end();
 
+/* ค่าระยะจอดหน้าแท่นหยิบ */
+float pick_can_distance = 7.5;  // ค่าระยะจอดหน้าแท่นหยิบ
+/* ค่าระยะจอดเมื่อ IR เจอกระป๋อง */
+float can_distance = 20;
+
+
 /* ค่าระยะจอดหน้าแท่นวาง */
 float place_left_side = 178; //5.0;//2.5 + 2.0;      // ค่าระยะจอดกรณีมือซ้ายวางกระป๋องซ้าย
 float place_right_side = 178; //5.0; //2.5 + 2.0;     // ค่าระยะจอดกรณีมือขวาวางกระป๋องขวา
@@ -51,10 +57,10 @@ int Swing_Left = 90;   //80   //SO สวิงแขนซ้ายเพิ่
 int Swing_Right = 95;  //95  //S1 สวิงแขนขวาเพิ่มง้างออก ลด หุบเข้า
 ////////////////////////////////////////////////////////
 int Open_Left = 30;   //S2 อ้ามือ ชุดมือจับมือซ้ายค่ามากยิ่งหุบ 35
-int Close_Left = 55;  //S2 หุบมือ ชุดมือจับมือซ้ายค่าน้อยยิ่งอ้า //67
+int Close_Left = 67;  //S2 หุบมือ ชุดมือจับมือซ้ายค่าน้อยยิ่งอ้า //67
 ////////////////////////////////////////////////////
-int Open_Right = 50;   //S3 อ้ามือ ชุดมือจับมือขวาค่ามากยิ่งหุบ 35
-int Close_Right = 80;  //S3 หุบมือ ชุดมือจับมือขวา ค่าน้อยยิ่งอ้า //76
+int Open_Right = 56;   //S3 อ้ามือ ชุดมือจับมือขวาค่ามากยิ่งหุบ 35
+int Close_Right = 84;  //S3 หุบมือ ชุดมือจับมือขวา ค่าน้อยยิ่งอ้า //76
 ////////////////////////////////////////////////////
 int switch_degree = 40;  //35
 int switch_flag = 0;
@@ -65,8 +71,8 @@ char can_in_gripper[2] = { 'u', 'u' };
 char CanL[3]={'u','u','u'};
 char CanR[3]={'u','u','u'};
 
-bool autoplace=true;
-bool PlaceBoth=false; //Set to 'true' if you want to place both cans
+bool autoplace= false;
+bool PlaceBoth= false; //Set to 'true' if you want to place both cans
 
 void setup() {
   initialize();
@@ -101,19 +107,29 @@ void setup() {
   //--
 
   // Menu();
-  
   ///////////////////////เปิดอ่านค่า เซนเซอร์ ////////////////////////////////
   // ShowValue_Sensor();    // โชว์ค่าเซ็นเซอร์ตรวจจับเส้น (ReadSensor)
   // ShowDistanceSensor();  // โชว์ค่าเซ็นเซอร์วัดระยะทาง (Sonar)
   // calibrateCanColor();   // Calibrate เซ็นเซอร์อ่านค่าสี ()
+  // testSensorVal();
   //////////////////////////////////////////////////////////
   // calibrateCanColor();
-  
+  //-----------
+
   setAngleOffset();
   current_degree = 0;
   SetArm();
+
+  // STOP();
+  // set_close_open();
+  testCanImpl();
+
+  
+  //-----------
   // delay(300); calibrateIMU();
-  SelectMenu();
+  // SelectMenu();
+
+
   // MenuTEST();
   // MenuTrack();
 }
