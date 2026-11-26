@@ -25,8 +25,8 @@ void get_b(int lif){  // จับกระป๋อง (ยก lif)
   lift(lif);
 }
 void drop_b(int open){  // กางแขน คู่  
-  servoWrite(chanal_Gripper_Left, Close_Left-open); //S2 หุบมือ ชุดมือจับมือซ้ายค่าน้อยยิ่งอ้า เลย -
-  servoWrite(chanal_Gripper_Right, Close_Right-open);
+  servoWrite(chanal_Gripper_Left, Close_Left - open); //S2 หุบมือ ชุดมือจับมือซ้ายค่าน้อยยิ่งอ้า เลย -
+  servoWrite(chanal_Gripper_Right, Close_Right - open);
   delay(1000);
   servoOpenLeft();
   servoOpenRight();
@@ -36,8 +36,8 @@ void setCan1(int open) {
   delay(150);
   // servoWrite(chanal_Gripper_Left, Open_Left);
   // servoWrite(chanal_Gripper_Right, Open_Right);
-  servoWrite(chanal_Gripper_Left, Close_Left-open); //S2 หุบมือ ชุดมือจับมือซ้ายค่าน้อยยิ่งอ้า เลย -
-  servoWrite(chanal_Gripper_Right, Close_Right-open);
+  servoWrite(chanal_Gripper_Left, Close_Left - open); //S2 หุบมือ ชุดมือจับมือซ้ายค่าน้อยยิ่งอ้า เลย -
+  servoWrite(chanal_Gripper_Right, Close_Right - open);
   delay(1000);
   FF(10);delay(200); motorStop();
   servoWrite(chanal_Gripper_Left, Close_Left);
@@ -57,10 +57,13 @@ void testCanImpl(){
 //--- Templates/Legacies
   get_b(5); //คีบ แล้ว(ยก)
   delay(2000);
-  setCan1(11); // มีระยะกางมือจับเล็กน้อย(open)
+  setCan1(30); // มีระยะกางมือจับเล็กน้อย(open)
   delay(2000);
-  drop_b(11); //ปล่อยกระป๋อง มีระยะกางมือจับเล็กน้อยก่อน(open)
+  drop_b(30); //ปล่อยกระป๋อง มีระยะกางมือจับเล็กน้อยก่อน(open)
   lift(0);
+  STOP();
+
+  PickCan(5);
 
 //---
 //--- Green
