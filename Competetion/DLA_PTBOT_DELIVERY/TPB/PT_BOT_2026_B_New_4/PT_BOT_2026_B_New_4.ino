@@ -13,7 +13,7 @@
 // Preferences ;
 /* ค่าเซ็นเซอร์ตรวจจับเส้น */
 //                  S0   S1   S2   S3   S4   S5
-int sensor_min[] = { 373, 519, 185, 360, 300, 241 };    // ค่าสีดำ
+int sensor_min[] = { 268, 267, 167, 248, 235, 213 };    // ค่าสีดำ
 int sensor_max[] = { 948, 949, 744, 958, 950, 919 };  // ค่าสีขาว
 int X;
 /* ค่าเซ็นเซอร์อ่านค่าสี */
@@ -46,21 +46,23 @@ byte servo_pin[] = { 6, 5, 4, 0, 1, 2, 3 };
 
 long delayALL = 100;
 int MoveTimerPlace; //158
-int CanZeroDistance = 50;
-int MoveCanZeroTimer = 100;
-int SonarDis = 190;
+int CanZeroDistance = 30;
+int MoveCanZeroTimer = 150;
+int SonarDis = 150;
 TaskHandle_t sonarTaskHandle = NULL;
 TaskHandle_t switchGripperTaskHandle = NULL;
 
 ////////////////////////////////////////////////////////
 int Swing_Left = 90;   //80   //SO สวิงแขนซ้ายเพิ่มง้างออก ลด หุบเข้า
-int Swing_Right = 95;  //95  //S1 สวิงแขนขวาเพิ่มง้างออก ลด หุบเข้า
+                       // increasing value swing towards right, decreasing value swing toward left. 
+int Swing_Right = 90;  //95  //S1 สวิงแขนขวาเพิ่มง้างออก ลด หุบเข้า
+                       // increasing value swing towards right, decreasing value swing toward left. 
 ////////////////////////////////////////////////////////
 int Open_Left = 30;   //S2 อ้ามือ ชุดมือจับมือซ้ายค่ามากยิ่งหุบ 35
-int Close_Left = 67;  //S2 หุบมือ ชุดมือจับมือซ้ายค่าน้อยยิ่งอ้า //67
+int Close_Left = 72;  //S2 หุบมือ ชุดมือจับมือซ้ายค่าน้อยยิ่งอ้า //67
 ////////////////////////////////////////////////////
 int Open_Right = 40;   //S3 อ้ามือ ชุดมือจับมือขวาค่ามากยิ่งหุบ 35
-int Close_Right = 84;  //S3 หุบมือ ชุดมือจับมือขวา ค่าน้อยยิ่งอ้า //76
+int Close_Right = 98;  //S3 หุบมือ ชุดมือจับมือขวา ค่าน้อยยิ่งอ้า //76
 ////////////////////////////////////////////////////
 int switch_degree = 40;  //35
 int switch_flag = 0;
@@ -85,6 +87,8 @@ void setup() {
   setupColorSensor();
   // setupDistanc2eSensor();
   setupServo();
+  // SetArm();
+  // swingGripper(char gripper, int degree);
 
   // xTaskCreatePinnedToCore(
   //   beepLogic,    // ชื่อฟังก์ชันที่จะให้ทำงาน
@@ -119,11 +123,28 @@ void setup() {
   setAngleOffset();
   
   current_degree = 0;
-  SetArm();
+  // SetArm();
+  lift(0);
+  delay(150);
+  
+  delay(700);
+  // servoWrite(chanal_Gripper_Left, 30); 
 
+  // servoCloseRight();
+  // beep(100);
+  // delay(800);
+  // servoCloseLeft();
+
+  // servoWrite(chanal_Gripper_Right, 40);
+
+
+  // KeepArm();
   STOP();
+  KeepArm();
+  // Experiment();
+  Operation();
   // set_close_open();
-  testCanImpl();
+  // testCanImpl();
 
 
   

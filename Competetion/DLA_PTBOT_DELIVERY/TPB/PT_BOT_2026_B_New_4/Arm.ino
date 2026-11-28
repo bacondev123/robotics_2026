@@ -189,6 +189,18 @@ void moveToCan(int distance) {
   // motorStop();
   vTaskSuspend(sonarTaskHandle);
 }
+void moveToCan15(int distance) {
+  vTaskResume(sonarTaskHandle);
+  delay(10);
+  unsigned long int timer = millis();
+  while (readSonar() > distance || millis() - timer <= 500) FF(14);
+  FF(12,50);
+  motorStop();
+  // delay(200);
+  // BB(20,50);
+  // motorStop();
+  vTaskSuspend(sonarTaskHandle);
+}
 
 void moveToCan0(int distance) {
   unsigned long int timer = millis();
@@ -362,6 +374,8 @@ void pickCan(int pick_height, bool switch_lr) {
   servoWrite(chanal_Swing_Left, Swing_Left);
   servoWrite(chanal_Swing_Right, Swing_Right);
 }
+
+
 void autoPickCan(int pick_height) {  //swap=1 คือแท่นวางสลับสี r-y-g  ///swap=0 คือแท่นวางปกติ g-y-r
   servoWrite(chanal_Gripper_Left, Open_Left);
   servoWrite(chanal_Gripper_Right, Open_Right);

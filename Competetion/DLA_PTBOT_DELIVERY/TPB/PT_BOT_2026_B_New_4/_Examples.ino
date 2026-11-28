@@ -103,4 +103,7 @@ void Examples() {
   //                    'c' = วางตำแหน่งตรงกลาง
   //                    'r' = วางตำแหน่งด้านขวา
   autoPlaceCan(10);       // วางกระป๋องแบบแยกสีอัตโนมัติ placeCan(ความสูง หน่วยเป็นเซ็นติเมตร)
+  servoWrite(chanal_Swing_Left, 90); // Default angle is 90. Increasing value swings toward right side. Decreasing value swings toward left side
+  servoWrite(chanal_Swing_Right, 90); // Default angle is 90. Increasing value swings toward right side. Decreasing value swings toward left side
+  servoWrite(chanal_Gripper_Left, 90);
 }

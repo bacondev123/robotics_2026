@@ -1,7 +1,7 @@
 void spinDegree(int relative_degree) {
   setAngleOffset();
   current_degree = 0;
-  int min_speed = 17;                             // ความเร็วต่ำสุด
+  int min_speed = 20;                             // ความเร็วต่ำสุด
   int max_speed = 60;                            // ความเร็วสูงสุด
   float kp = 2.0;                                 // KP 0.8
   float kd = 10.0;                                 // KD 1.0
